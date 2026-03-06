@@ -498,6 +498,7 @@ body {
   flex-shrink: 0;
   animation: fadeIn 0.2s ease;
   display: none;
+  min-height: 300px;
 }
 .detail-panel.open { display: block; }
 .detail-section { padding: 16px 20px; border-bottom: 1px solid var(--border); }
@@ -955,7 +956,10 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
     <!-- CALCULATOR -->
     <div id="view-calculator" class="view">
       <div class="page-header">
-        <div><div class="page-title">Price Calculator</div></div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <button class="btn btn-ghost btn-icon" onclick="showView('dashboard')" style="font-size:20px;color:var(--text-2);">‹</button>
+          <div><div class="page-title">Price Calculator</div></div>
+        </div>
       </div>
       <div class="calc-section">
         <div class="calc-grid">
@@ -1006,7 +1010,12 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
 
     <!-- SETTINGS -->
     <div id="view-settings" class="view">
-      <div class="page-header"><div><div class="page-title">Settings</div></div></div>
+      <div class="page-header">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <button class="btn btn-ghost btn-icon" onclick="history.back ? showView('dashboard') : showView('dashboard')" style="font-size:20px;color:var(--text-2);">‹</button>
+          <div><div class="page-title">Settings</div></div>
+        </div>
+      </div>
       <div class="settings-group">
         <div class="settings-group-title">Account</div>
         <div class="settings-row" id="signed-in-as">
@@ -1195,6 +1204,28 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
 
 <div id="toast"></div>
 
+<!-- FLOATING CALCULATOR BUTTON (hidden on calculator view) -->
+<button id="calc-fab" onclick="showView('calculator')" style="
+  position: fixed;
+  bottom: 24px;
+  right: 20px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--red);
+  border: none;
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(190,38,37,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+  transition: var(--transition);
+  -webkit-tap-highlight-color: transparent;
+" title="Calculator">🧮</button>
+
 <script>
 // ══════════════════════════════════════
 // CONFIG — paste your Supabase keys here
@@ -1266,9 +1297,16 @@ function onSignedIn() {
 function toggleUserMenu() { showView('settings'); }
 
 // ══════════════════════════════════════
-// INIT CHECK
+// INIT CHECK — DEV MODE: auth bypassed
 // ══════════════════════════════════════
+const DEV_MODE = true; // set to false to re-enable login
+
 (async () => {
+  if (DEV_MODE) {
+    currentUser = { id: 'dev-user', email: 'trevor@tomfalkph.com' };
+    onSignedIn();
+    return;
+  }
   const { data: { session } } = await sb.auth.getSession();
   if (session?.user) {
     currentUser = session.user;
@@ -1282,6 +1320,7 @@ function toggleUserMenu() { showView('settings'); }
 async function loadAll() {
   try {
     const uid = currentUser?.id;
+    // In dev mode, uid is 'dev-user' — queries will return empty arrays cleanly
     const [cc, jj, ii, mm] = await Promise.all([
       sb.from('customers').select('*').eq('user_id', uid).order('last_name'),
       sb.from('jobs').select('*').eq('user_id', uid).order('scheduled_date', { ascending: true }),
@@ -1312,8 +1351,15 @@ function showView(name) {
   });
   const v = document.getElementById('view-' + name);
   if (v) v.classList.add('active');
+  // Show/hide floating calc FAB — hide on calculator view
+  const fab = document.getElementById('calc-fab');
+  if (fab) fab.style.display = name === 'calculator' ? 'none' : 'flex';
   if (name === 'jobs') populateJobCustomerSelect();
   if (name === 'invoices') populateInvSelects();
+  // Close any open detail panels when switching views
+  document.querySelectorAll('.detail-panel').forEach(p => p.classList.remove('open'));
+  selectedCustomerId = null;
+  selectedJobId = null;
 }
 
 // ══════════════════════════════════════
@@ -1409,6 +1455,8 @@ function selectCustomer(id) {
         <span class="badge ${statusBadgeClass(j.status)}">${j.status||'—'}</span></div>`).join('') : '<div class="text-muted" style="font-size:13px;">No jobs on record</div>'}
       <button class="btn btn-primary btn-sm" style="margin-top:10px;width:100%;" onclick="openJobForCustomer('${c.id}')">+ New Job</button>
     </div>`;
+  // Scroll panel into view on mobile
+  setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
 }
 
 async function saveCustomer() {
@@ -1522,6 +1570,7 @@ function selectJob(id) {
         ${['scheduled','in-progress','completed'].map(s=>`<button class="btn btn-sm ${j.status===s?'btn-primary':'btn-secondary'}" onclick="updateJobStatus('${j.id}','${s}')">${s.replace('-',' ')}</button>`).join('')}
       </div>
     </div>`;
+  setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
 }
 
 async function saveJob() {
