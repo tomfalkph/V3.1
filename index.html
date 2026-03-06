@@ -1,0 +1,2122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tom Falk P&H — Field CRM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA27u_Ig_EqhOQqq3BUERrrygjjPBJxeWg&libraries=places&callback=initPlaces" async defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+/* ─── TOKENS ─────────────────────────────────────────── */
+:root {
+  --red:      #BE2625;
+  --red-d:    #9b1e1d;
+  --red-l:    #d93b3a;
+  --black:    #1A1A1A;
+  --bg:       #111111;
+  --surface:  #1e1e1e;
+  --surface2: #262626;
+  --surface3: #2e2e2e;
+  --border:   #383838;
+  --border2:  #444444;
+  --text:     #f0f0f0;
+  --text2:    #a0a0a0;
+  --text3:    #686868;
+  --green:    #2ecc71;
+  --yellow:   #f1c40f;
+  --blue:     #3498db;
+  --radius:   10px;
+  --nav-h:    60px;
+  --font:     'DM Sans', sans-serif;
+}
+
+/* ─── RESET ──────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; font-family: var(--font); background: var(--bg); color: var(--text); font-size: 15px; }
+button { font-family: var(--font); cursor: pointer; border: none; outline: none; }
+input, select, textarea { font-family: var(--font); outline: none; border: none; background: none; color: var(--text); }
+a { color: inherit; text-decoration: none; }
+ul { list-style: none; }
+
+/* ─── LAYOUT ─────────────────────────────────────────── */
+#app { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+#header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 16px; height: 52px; background: var(--surface);
+  border-bottom: 1px solid var(--border); flex-shrink: 0; gap: 10px;
+}
+#header .logo { height: 28px; filter: brightness(0) invert(1); }
+#header .page-title { font-size: 15px; font-weight: 600; flex: 1; padding-left: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#header .header-actions { display: flex; gap: 8px; }
+
+#views { flex: 1; overflow-y: auto; overflow-x: hidden; padding-bottom: calc(var(--nav-h) + 8px); }
+
+#bottom-nav {
+  position: fixed; bottom: 0; left: 0; right: 0; height: var(--nav-h);
+  background: var(--surface); border-top: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-around;
+  z-index: 100;
+}
+.nav-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  flex: 1; padding: 8px 4px; background: none; color: var(--text3);
+  font-size: 10px; font-weight: 500; transition: color .15s;
+}
+.nav-btn svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.nav-btn.active { color: var(--red); }
+
+/* ─── VIEWS ──────────────────────────────────────────── */
+.view { display: none; padding: 14px 14px 0; }
+.view.active { display: block; }
+
+/* ─── CARDS ──────────────────────────────────────────── */
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px; margin-bottom: 10px;
+  transition: border-color .15s;
+}
+.card:active { border-color: var(--border2); }
+.card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.card-title { font-weight: 600; font-size: 15px; }
+.card-sub { font-size: 12px; color: var(--text2); margin-top: 2px; }
+.card-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.badge {
+  font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 20px;
+  background: var(--surface3); color: var(--text2); letter-spacing: .3px;
+}
+.badge.lead    { background: rgba(241,196,15,.15); color: var(--yellow); }
+.badge.active  { background: rgba(46,204,113,.15); color: var(--green); }
+.badge.estimate{ background: rgba(52,152,219,.15); color: var(--blue); }
+.badge.closed  { background: rgba(160,160,160,.1); color: var(--text3); }
+.badge.red     { background: rgba(190,38,37,.2); color: var(--red-l); }
+
+/* ─── SEARCH / FILTER BAR ────────────────────────────── */
+.search-row { display: flex; gap: 8px; margin-bottom: 12px; }
+.search-box {
+  flex: 1; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 9px 12px; font-size: 14px; color: var(--text);
+}
+.search-box::placeholder { color: var(--text3); }
+.filter-btn {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 9px 12px; color: var(--text2); font-size: 13px;
+}
+
+/* ─── SECTION HEADER ─────────────────────────────────── */
+.section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.section-title { font-size: 12px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 1px; }
+.add-btn {
+  display: flex; align-items: center; gap: 5px;
+  background: var(--red); color: #fff; border-radius: 8px;
+  padding: 7px 12px; font-size: 13px; font-weight: 600;
+}
+.add-btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2.2; }
+
+/* ─── FORM ELEMENTS ──────────────────────────────────── */
+.form-group { margin-bottom: 14px; }
+.form-label { font-size: 12px; font-weight: 600; color: var(--text2); display: block; margin-bottom: 5px; text-transform: uppercase; letter-spacing: .5px; }
+.form-input {
+  width: 100%; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 11px 12px; font-size: 14px; color: var(--text);
+  transition: border-color .15s;
+}
+.form-input:focus { border-color: var(--red); }
+.form-input::placeholder { color: var(--text3); }
+.form-select {
+  width: 100%; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 11px 12px; font-size: 14px; color: var(--text);
+  appearance: none;
+}
+.form-textarea { resize: vertical; min-height: 80px; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.input-group { position: relative; }
+.input-prefix {
+  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+  color: var(--text3); font-size: 14px; pointer-events: none;
+}
+.input-group .form-input { padding-left: 24px; }
+
+/* ─── DIVIDER ────────────────────────────────────────── */
+.divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+
+/* ─── BTN STYLES ─────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border-radius: 8px; padding: 11px 16px; font-size: 14px; font-weight: 600;
+  transition: opacity .15s; width: 100%;
+}
+.btn:active { opacity: .8; }
+.btn-primary { background: var(--red); color: #fff; }
+.btn-secondary { background: var(--surface3); color: var(--text); border: 1px solid var(--border2); }
+.btn-ghost { background: none; color: var(--text2); border: 1px solid var(--border); }
+.btn-danger { background: rgba(190,38,37,.15); color: var(--red-l); border: 1px solid rgba(190,38,37,.3); }
+.btn-success { background: rgba(46,204,113,.15); color: var(--green); border: 1px solid rgba(46,204,113,.3); }
+.btn-sm { padding: 7px 12px; font-size: 13px; width: auto; }
+.btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+/* ─── MODAL ──────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 200;
+  display: flex; align-items: flex-end; justify-content: center;
+  opacity: 0; pointer-events: none; transition: opacity .2s;
+}
+.modal-overlay.open { opacity: 1; pointer-events: all; }
+.modal {
+  background: var(--surface); border-radius: 18px 18px 0 0;
+  width: 100%; max-width: 600px; max-height: 92dvh;
+  overflow-y: auto; padding: 20px 16px 32px;
+  transform: translateY(40px); transition: transform .25s cubic-bezier(.16,1,.3,1);
+}
+.modal-overlay.open .modal { transform: translateY(0); }
+.modal-handle { width: 36px; height: 4px; background: var(--border2); border-radius: 2px; margin: 0 auto 18px; }
+.modal-title { font-size: 18px; font-weight: 700; margin-bottom: 18px; }
+.modal-actions { display: flex; gap: 8px; margin-top: 18px; }
+.modal-actions .btn { flex: 1; }
+
+/* ─── TOGGLE ─────────────────────────────────────────── */
+.toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; }
+.toggle-label { font-size: 14px; }
+.toggle {
+  position: relative; width: 46px; height: 26px;
+  background: var(--surface3); border-radius: 13px;
+  border: 1px solid var(--border2); cursor: pointer; transition: background .2s;
+  flex-shrink: 0;
+}
+.toggle.on { background: var(--red); border-color: var(--red); }
+.toggle::after {
+  content: ''; position: absolute; top: 3px; left: 3px;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: #fff; transition: left .2s;
+}
+.toggle.on::after { left: 23px; }
+
+/* ─── STAT STRIP ─────────────────────────────────────── */
+.stat-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+.stat-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 12px 10px; text-align: center;
+}
+.stat-num { font-size: 22px; font-weight: 700; }
+.stat-lbl { font-size: 11px; color: var(--text2); margin-top: 2px; }
+
+/* ─── TIME LOG TABLE ─────────────────────────────────── */
+.time-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.time-table th { color: var(--text3); font-weight: 600; text-align: left; padding: 4px 6px 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+.time-table td { padding: 8px 6px; border-top: 1px solid var(--border); }
+.time-table tr:first-child td { border-top: none; }
+.time-table .total-row td { font-weight: 700; color: var(--text); border-top: 2px solid var(--border2); padding-top: 10px; }
+
+/* ─── DETAIL SECTIONS ────────────────────────────────── */
+.detail-section { margin-bottom: 18px; }
+.detail-section-title {
+  font-size: 11px; font-weight: 700; color: var(--text3); text-transform: uppercase;
+  letter-spacing: 1px; margin-bottom: 10px; display: flex; align-items: center;
+  justify-content: space-between;
+}
+.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.info-cell { }
+.info-cell .lbl { font-size: 11px; color: var(--text3); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 3px; }
+.info-cell .val { font-size: 14px; }
+
+/* ─── LINE ITEMS ─────────────────────────────────────── */
+.line-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 14px;
+}
+.line-item:last-child { border-bottom: none; }
+.line-item .li-name { flex: 1; }
+.line-item .li-qty  { color: var(--text2); width: 30px; text-align: center; }
+.line-item .li-amt  { font-weight: 600; width: 70px; text-align: right; }
+.line-item .li-del  { margin-left: 10px; }
+.line-total { display: flex; justify-content: space-between; padding: 10px 0 0; font-weight: 700; font-size: 15px; border-top: 2px solid var(--border2); margin-top: 4px; }
+
+/* ─── FLOATING CALC BTN ──────────────────────────────── */
+#calc-fab {
+  position: fixed; bottom: calc(var(--nav-h) + 14px); right: 14px;
+  width: 50px; height: 50px; border-radius: 50%;
+  background: var(--red); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 20px rgba(190,38,37,.5); z-index: 150;
+  transition: transform .15s;
+}
+#calc-fab:active { transform: scale(.93); }
+#calc-fab svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+/* ─── CALC MODAL ─────────────────────────────────────── */
+.calc-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px; }
+.calc-row { display: flex; justify-content: space-between; font-size: 14px; padding: 7px 0; border-bottom: 1px solid var(--border); }
+.calc-row:last-child { border: none; }
+.calc-row.total { font-size: 16px; font-weight: 700; border-top: 2px solid var(--border2); padding-top: 10px; margin-top: 4px; }
+.calc-display {
+  background: var(--surface3); border-radius: 10px; padding: 16px;
+  margin-bottom: 14px; min-height: 80px;
+}
+.calc-display .result-lbl { font-size: 12px; color: var(--text3); margin-bottom: 4px; }
+.calc-display .result-val { font-size: 28px; font-weight: 700; }
+.calc-display .result-sub { font-size: 12px; color: var(--text2); margin-top: 4px; }
+
+/* ─── CLOCK BTN ──────────────────────────────────────── */
+.clock-btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; padding: 13px; border-radius: 10px;
+  font-size: 15px; font-weight: 700; border: none; cursor: pointer;
+}
+.clock-btn.in  { background: rgba(46,204,113,.15); color: var(--green); border: 1px solid rgba(46,204,113,.3); }
+.clock-btn.out { background: rgba(190,38,37,.15);  color: var(--red-l);  border: 1px solid rgba(190,38,37,.3); }
+.clock-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+/* ─── EMPTY STATE ────────────────────────────────────── */
+.empty-state { text-align: center; padding: 50px 20px; }
+.empty-state svg { width: 48px; height: 48px; stroke: var(--text3); fill: none; stroke-width: 1.4; margin: 0 auto 14px; display: block; }
+.empty-state p { color: var(--text2); font-size: 14px; }
+
+/* ─── AUTOCOMPLETE DROPDOWN ──────────────────────────── */
+.pac-container {
+  background: var(--surface2) !important; border: 1px solid var(--border2) !important;
+  border-radius: 8px !important; font-family: var(--font) !important;
+  box-shadow: 0 8px 30px rgba(0,0,0,.5) !important; margin-top: 4px !important;
+}
+.pac-item { padding: 8px 12px !important; color: var(--text) !important; cursor: pointer; font-size: 13px !important; border-top: 1px solid var(--border) !important; }
+.pac-item:hover { background: var(--surface3) !important; }
+.pac-item-query { color: var(--text) !important; }
+.pac-icon { display: none !important; }
+
+/* ─── CUSTOMER INLINE CREATE ─────────────────────────── */
+.inline-create { background: var(--surface2); border: 1px dashed var(--border2); border-radius: 10px; padding: 14px; margin-top: 8px; }
+.inline-create-title { font-size: 13px; font-weight: 600; color: var(--yellow); margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+
+/* ─── STATUS PIPELINE ────────────────────────────────── */
+.pipeline { display: flex; gap: 0; margin-bottom: 16px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
+.pipe-step {
+  flex: 1; text-align: center; padding: 8px 4px; font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .5px; color: var(--text3);
+  background: var(--surface2); cursor: pointer; transition: background .15s, color .15s;
+  border-right: 1px solid var(--border);
+}
+.pipe-step:last-child { border-right: none; }
+.pipe-step.active { background: var(--red); color: #fff; }
+.pipe-step.done { background: rgba(46,204,113,.15); color: var(--green); }
+
+/* ─── CHIP LIST ──────────────────────────────────────── */
+.chip-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.chip {
+  font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 20px;
+  background: var(--surface3); color: var(--text2); display: flex; align-items: center; gap: 5px;
+}
+.chip-remove { color: var(--text3); cursor: pointer; font-size: 14px; line-height: 1; }
+
+/* ─── SWIPEABLE TABS ─────────────────────────────────── */
+.tab-bar { display: flex; gap: 0; border-bottom: 2px solid var(--border); margin-bottom: 14px; }
+.tab { flex: 1; text-align: center; padding: 10px 8px; font-size: 13px; font-weight: 600; color: var(--text3); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: color .15s, border-color .15s; }
+.tab.active { color: var(--red); border-color: var(--red); }
+
+/* ─── SCROLLBAR ──────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+/* ─── ACTIVE CLOCK INDICATOR ─────────────────────────── */
+.clock-indicator {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12px; color: var(--green); font-weight: 600;
+}
+.clock-indicator::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 1.5s ease infinite; }
+@keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- HEADER -->
+  <div id="header">
+    <img src="./logo.png" class="logo" alt="Tom Falk" onerror="this.style.display='none';document.getElementById('logo-text').style.display='block'">
+    <span id="logo-text" style="display:none;font-weight:700;font-size:15px;color:var(--red)">TOM FALK P&H</span>
+    <span class="page-title" id="page-title">Dashboard</span>
+    <div class="header-actions" id="header-actions"></div>
+  </div>
+
+  <!-- VIEWS -->
+  <div id="views">
+
+    <!-- ══ DASHBOARD ══ -->
+    <div class="view active" id="view-dashboard">
+      <div class="stat-strip" id="stat-strip"></div>
+      <div class="section-header">
+        <span class="section-title">Active Jobs</span>
+        <a href="#" onclick="showView('jobs');return false" style="font-size:13px;color:var(--red)">All →</a>
+      </div>
+      <div id="dash-active-jobs"></div>
+      <div class="section-header" style="margin-top:8px">
+        <span class="section-title">Recent Leads</span>
+        <a href="#" onclick="showView('leads');return false" style="font-size:13px;color:var(--red)">All →</a>
+      </div>
+      <div id="dash-leads"></div>
+    </div>
+
+    <!-- ══ LEADS ══ -->
+    <div class="view" id="view-leads">
+      <div class="search-row">
+        <input class="search-box" id="lead-search" placeholder="Search leads…" oninput="renderLeads()">
+      </div>
+      <div class="section-header">
+        <span class="section-title" id="lead-count">Leads</span>
+        <button class="add-btn" onclick="openModal('modal-lead')">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          New Lead
+        </button>
+      </div>
+      <div id="lead-list"></div>
+    </div>
+
+    <!-- ══ CUSTOMERS ══ -->
+    <div class="view" id="view-customers">
+      <div class="search-row">
+        <input class="search-box" id="cust-search" placeholder="Search customers…" oninput="renderCustomers()">
+      </div>
+      <div class="section-header">
+        <span class="section-title" id="cust-count">Customers</span>
+        <button class="add-btn" onclick="openModal('modal-customer')">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          New Customer
+        </button>
+      </div>
+      <div id="cust-list"></div>
+    </div>
+
+    <!-- ══ JOBS ══ -->
+    <div class="view" id="view-jobs">
+      <div class="tab-bar">
+        <div class="tab active" onclick="setJobTab('active',this)">Active</div>
+        <div class="tab" onclick="setJobTab('estimate',this)">Estimates</div>
+        <div class="tab" onclick="setJobTab('closed',this)">Closed</div>
+        <div class="tab" onclick="setJobTab('all',this)">All</div>
+      </div>
+      <div class="search-row">
+        <input class="search-box" id="job-search" placeholder="Search jobs…" oninput="renderJobs()">
+      </div>
+      <div class="section-header">
+        <span class="section-title" id="job-count">Jobs</span>
+        <button class="add-btn" onclick="openModal('modal-job')">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          New Job
+        </button>
+      </div>
+      <div id="job-list"></div>
+    </div>
+
+    <!-- ══ JOB DETAIL ══ -->
+    <div class="view" id="view-job-detail">
+      <div id="job-detail-content"></div>
+    </div>
+
+    <!-- ══ CUSTOMER DETAIL ══ -->
+    <div class="view" id="view-customer-detail">
+      <div id="customer-detail-content"></div>
+    </div>
+
+    <!-- ══ LEAD DETAIL ══ -->
+    <div class="view" id="view-lead-detail">
+      <div id="lead-detail-content"></div>
+    </div>
+
+  </div><!-- /views -->
+
+  <!-- ══ BOTTOM NAV ══ -->
+  <div id="bottom-nav">
+    <button class="nav-btn active" onclick="showView('dashboard',this)" id="nav-dashboard">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      Dashboard
+    </button>
+    <button class="nav-btn" onclick="showView('leads',this)" id="nav-leads">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/><line x1="16" y1="3" x2="20" y2="7"/><line x1="20" y1="3" x2="16" y2="7"/></svg>
+      Leads
+    </button>
+    <button class="nav-btn" onclick="showView('customers',this)" id="nav-customers">
+      <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2 20c0-4 3.1-7 7-7s7 3 7 7"/><circle cx="18" cy="9" r="3"/><path d="M22 20c0-3-1.8-5.5-4-6"/></svg>
+      Customers
+    </button>
+    <button class="nav-btn" onclick="showView('jobs',this)" id="nav-jobs">
+      <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>
+      Jobs
+    </button>
+  </div>
+
+</div><!-- /app -->
+
+<!-- FLOATING CALC -->
+<button id="calc-fab" onclick="openModal('modal-calc')">
+  <svg viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="10" y2="10"/><line x1="14" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="10" y2="14"/><line x1="14" y1="14" x2="16" y2="14"/><line x1="8" y1="18" x2="10" y2="18"/><line x1="14" y1="18" x2="16" y2="18"/></svg>
+</button>
+
+<!-- ══════════════════════════════════════════════════════════
+     MODALS
+═══════════════════════════════════════════════════════════ -->
+
+<!-- NEW LEAD -->
+<div class="modal-overlay" id="modal-lead">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">New Lead</div>
+    <div class="form-group">
+      <label class="form-label">Name *</label>
+      <input class="form-input" id="lead-name" placeholder="Full name">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Phone</label>
+      <input class="form-input" id="lead-phone" placeholder="(717) 000-0000" type="tel">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Email</label>
+      <input class="form-input" id="lead-email" placeholder="email@example.com" type="email">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Service Address</label>
+      <input class="form-input pac-input-lead" id="lead-address" placeholder="Start typing address…">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Issue / Request</label>
+      <textarea class="form-input form-textarea" id="lead-issue" placeholder="Describe the request…"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Source</label>
+      <select class="form-select" id="lead-source">
+        <option value="">Select source</option>
+        <option>Google</option><option>Referral</option><option>Repeat Customer</option>
+        <option>Facebook</option><option>Walk-in</option><option>Other</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-lead')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveLead()">Save Lead</button>
+    </div>
+  </div>
+</div>
+
+<!-- NEW CUSTOMER -->
+<div class="modal-overlay" id="modal-customer">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="modal-customer-title">New Customer</div>
+    <div class="form-group">
+      <label class="form-label">Name *</label>
+      <input class="form-input" id="cust-name" placeholder="Full name">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Phone</label>
+      <input class="form-input" id="cust-phone" placeholder="(717) 000-0000" type="tel">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Email</label>
+      <input class="form-input" id="cust-email" placeholder="email@example.com" type="email">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Service Address</label>
+      <input class="form-input pac-input-cust" id="cust-address" placeholder="Start typing address…">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Billing Address (if different)</label>
+      <input class="form-input" id="cust-billing" placeholder="Billing address">
+    </div>
+    <div class="toggle-row">
+      <span class="toggle-label">Maintenance Plan Member</span>
+      <div class="toggle" id="cust-plan-toggle" onclick="this.classList.toggle('on')"></div>
+    </div>
+    <div class="form-group" style="margin-top:14px">
+      <label class="form-label">Notes</label>
+      <textarea class="form-input form-textarea" id="cust-notes" placeholder="Customer notes…"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-customer');pendingJobCustomerCreate=false;">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCustomer()">Save Customer</button>
+    </div>
+  </div>
+</div>
+
+<!-- NEW JOB -->
+<div class="modal-overlay" id="modal-job">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="modal-job-title">New Job / Work Order</div>
+    <div class="form-group">
+      <label class="form-label">Customer *</label>
+      <input class="form-input" id="job-cust-search" placeholder="Search customer name…" oninput="populateJobCustomerDropdown()">
+      <div id="job-cust-results" style="margin-top:4px"></div>
+      <div id="job-cust-selected" style="display:none;margin-top:6px;padding:8px 12px;background:var(--surface2);border:1px solid var(--red);border-radius:8px;font-size:13px;display:flex;align-items:center;justify-content:space-between"></div>
+      <!-- inline create prompt -->
+      <div id="job-cust-no-match" style="display:none;margin-top:8px">
+        <div style="font-size:13px;color:var(--text2);margin-bottom:8px">No match — create new customer?</div>
+        <button class="btn btn-secondary btn-sm" onclick="openInlineCustomerCreate()">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Create Customer
+        </button>
+      </div>
+      <div class="inline-create" id="job-inline-cust" style="display:none">
+        <div class="inline-create-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+          Quick Add Customer
+        </div>
+        <div class="form-group">
+          <label class="form-label">Name *</label>
+          <input class="form-input" id="ic-name" placeholder="Full name">
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Phone</label><input class="form-input" id="ic-phone" placeholder="(717) 000-0000"></div>
+          <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="ic-email" placeholder="email@"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Address</label>
+          <input class="form-input pac-input-ic" id="ic-address" placeholder="Start typing…">
+        </div>
+        <div class="toggle-row">
+          <span class="toggle-label" style="font-size:13px">Maintenance Plan</span>
+          <div class="toggle" id="ic-plan-toggle" onclick="this.classList.toggle('on')"></div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button class="btn btn-ghost btn-sm" onclick="closeInlineCustomerCreate()">Cancel</button>
+          <button class="btn btn-primary btn-sm" onclick="saveInlineCustomer()">Add Customer</button>
+        </div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Job Type</label>
+      <select class="form-select" id="job-type">
+        <option value="">Select type</option>
+        <option>Service Call</option><option>Installation</option><option>Maintenance</option>
+        <option>Emergency</option><option>Inspection</option><option>Estimate Only</option><option>Other</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description *</label>
+      <textarea class="form-input form-textarea" id="job-desc" placeholder="Describe the work…"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Service Address</label>
+      <input class="form-input pac-input-job" id="job-address" placeholder="Start typing or auto-fill from customer…">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Scheduled Date</label>
+        <input class="form-input" id="job-date" type="date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Priority</label>
+        <select class="form-select" id="job-priority">
+          <option value="normal">Normal</option>
+          <option value="high">High</option>
+          <option value="urgent">Urgent</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Assign Technicians</label>
+      <div id="job-tech-checkboxes" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:14px;background:var(--surface2);padding:7px 12px;border-radius:8px;border:1px solid var(--border);cursor:pointer">
+          <input type="checkbox" value="Jim" style="accent-color:var(--red)"> Jim
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:14px;background:var(--surface2);padding:7px 12px;border-radius:8px;border:1px solid var(--border);cursor:pointer">
+          <input type="checkbox" value="Jeff" style="accent-color:var(--red)"> Jeff
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:14px;background:var(--surface2);padding:7px 12px;border-radius:8px;border:1px solid var(--border);cursor:pointer">
+          <input type="checkbox" value="Apprentice" style="accent-color:var(--red)"> Apprentice
+        </label>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Status</label>
+      <select class="form-select" id="job-status">
+        <option value="active">Active</option>
+        <option value="estimate">Estimate</option>
+        <option value="scheduled">Scheduled</option>
+        <option value="closed">Closed</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Internal Notes</label>
+      <textarea class="form-input form-textarea" id="job-notes" placeholder="Internal notes only…"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-job')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveJob()">Save Job</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD TIME ENTRY -->
+<div class="modal-overlay" id="modal-time">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="modal-time-title">Log Time</div>
+    <input type="hidden" id="time-job-id">
+    <div class="form-group">
+      <label class="form-label">Technician</label>
+      <select class="form-select" id="time-tech">
+        <option value="Jim">Jim</option>
+        <option value="Jeff">Jeff</option>
+        <option value="Apprentice">Apprentice</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Date</label>
+        <input class="form-input" id="time-date" type="date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Visit #</label>
+        <input class="form-input" id="time-visit" type="number" min="1" placeholder="Auto">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Clock In</label>
+        <input class="form-input" id="time-in" type="time">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Clock Out</label>
+        <input class="form-input" id="time-out" type="time">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Notes</label>
+      <input class="form-input" id="time-notes" placeholder="Visit notes…">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-time')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTimeEntry()">Save Entry</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD LINE ITEM -->
+<div class="modal-overlay" id="modal-line">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Add Line Item</div>
+    <input type="hidden" id="line-job-id">
+    <input type="hidden" id="line-stage">
+    <div class="form-group">
+      <label class="form-label">Type</label>
+      <select class="form-select" id="line-type" onchange="updateLineType()">
+        <option value="labor">Labor</option>
+        <option value="material">Material</option>
+        <option value="fee">Fee / Other</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description *</label>
+      <input class="form-input" id="line-desc" placeholder="Item description…">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label" id="line-qty-label">Hours</label>
+        <input class="form-input" id="line-qty" type="number" min="0" step="0.25" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label" id="line-rate-label">Rate / Unit</label>
+        <div class="input-group">
+          <span class="input-prefix">$</span>
+          <input class="form-input" id="line-rate" type="number" min="0" step="0.01" placeholder="0.00">
+        </div>
+      </div>
+    </div>
+    <div id="line-material-fields" style="display:none">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Cost (your cost)</label>
+          <div class="input-group"><span class="input-prefix">$</span><input class="form-input" id="line-cost" type="number" step="0.01" placeholder="0.00" oninput="autoMarkup()"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Margin %</label>
+          <input class="form-input" id="line-margin" type="number" step="1" placeholder="40" oninput="calcSellFromMargin()">
+        </div>
+      </div>
+    </div>
+    <div class="form-group" id="line-total-display" style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-top:4px">
+      <span style="font-size:12px;color:var(--text3)">Line Total:</span>
+      <span id="line-total-preview" style="float:right;font-weight:700;font-size:15px">$0.00</span>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-line')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveLineItem()">Add Item</button>
+    </div>
+  </div>
+</div>
+
+<!-- CLOCK IN -->
+<div class="modal-overlay" id="modal-clockin">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Clock In</div>
+    <input type="hidden" id="ci-job-id">
+    <div class="form-group">
+      <label class="form-label">Technician *</label>
+      <select class="form-select" id="ci-tech">
+        <option value="Jim">Jim</option>
+        <option value="Jeff">Jeff</option>
+        <option value="Apprentice">Apprentice</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Date</label>
+        <input class="form-input" id="ci-date" type="date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Clock In Time</label>
+        <input class="form-input" id="ci-time" type="time">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Notes</label>
+      <input class="form-input" id="ci-notes" placeholder="Arrival notes…">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-clockin')">Cancel</button>
+      <button class="btn btn-success" onclick="saveClockIn()">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Clock In
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- CLOCK OUT -->
+<div class="modal-overlay" id="modal-clockout">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Clock Out</div>
+    <input type="hidden" id="co-job-id">
+    <input type="hidden" id="co-entry-id">
+    <div class="form-group">
+      <label class="form-label">Technician</label>
+      <div class="form-input" id="co-tech-display" style="background:var(--surface3);color:var(--text2)"></div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Clock Out Time</label>
+      <input class="form-input" id="co-time" type="time">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Notes</label>
+      <input class="form-input" id="co-notes" placeholder="Departure notes…">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-clockout')">Cancel</button>
+      <button class="btn btn-danger" onclick="saveClockOut()">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        Clock Out
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- CALCULATOR -->
+<div class="modal-overlay" id="modal-calc">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Field Pricing Calculator</div>
+
+    <div class="toggle-row" style="padding:0 0 14px">
+      <span class="toggle-label">Maintenance Plan Customer</span>
+      <div class="toggle" id="calc-plan-toggle" onclick="this.classList.toggle('on');calcUpdate()"></div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Labor</label>
+      <div class="form-row">
+        <div>
+          <select class="form-select" id="calc-labor-type" onchange="calcUpdate()">
+            <option value="202">Service Call ($202/hr)</option>
+            <option value="182">Continuous ($182/hr)</option>
+            <option value="170">Installation ($170/hr)</option>
+          </select>
+        </div>
+        <div>
+          <input class="form-input" id="calc-hours" type="number" min="0" step="0.25" placeholder="Hours" oninput="calcUpdate()">
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--text3);margin-top:6px">
+        Multi-hour jobs: first hour at service rate, remaining at continuous rate
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+        <input type="checkbox" id="calc-multi-hour" style="accent-color:var(--red)" onchange="calcUpdate()">
+        <label for="calc-multi-hour" style="font-size:13px;color:var(--text2)">Apply multi-hour split</label>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Materials</label>
+      <div class="form-row">
+        <div class="input-group">
+          <span class="input-prefix">$</span>
+          <input class="form-input" id="calc-mat-cost" type="number" step="0.01" placeholder="Your cost" oninput="calcUpdate()">
+        </div>
+        <div>
+          <select class="form-select" id="calc-mat-tier" onchange="calcUpdate()">
+            <option value="">Auto (from cost)</option>
+            <option value="50">≤$25 → 50%</option>
+            <option value="45">$26–$150 → 45%</option>
+            <option value="40">$151–$1,999 → 40%</option>
+            <option value="35">$2,000+ → 35% (plan only)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Additional Fees</label>
+      <div class="input-group">
+        <span class="input-prefix">$</span>
+        <input class="form-input" id="calc-fees" type="number" step="0.01" placeholder="0.00" oninput="calcUpdate()">
+      </div>
+    </div>
+
+    <div class="calc-display" id="calc-output">
+      <div class="result-lbl">Estimated Total</div>
+      <div class="result-val" id="calc-total">$0.00</div>
+      <div class="result-sub" id="calc-sub"></div>
+    </div>
+
+    <div id="calc-breakdown"></div>
+
+    <button class="btn btn-ghost" style="margin-top:10px" onclick="closeModal('modal-calc')">Close</button>
+  </div>
+</div>
+
+<!-- STATUS CHANGE CONFIRM -->
+<div class="modal-overlay" id="modal-status">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="modal-status-title">Update Status</div>
+    <p style="color:var(--text2);font-size:14px;margin-bottom:18px" id="modal-status-msg"></p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-status')">Cancel</button>
+      <button class="btn btn-primary" id="modal-status-confirm">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     JAVASCRIPT
+════════════════════════════════════════════════════════════ -->
+<script>
+// ──────────────────────────────────────────────────────────
+// GOOGLE PLACES API KEY (restrict to app.tomfalkplumbingandheating.com)
+// ──────────────────────────────────────────────────────────
+const GOOGLE_PLACES_API_KEY = 'AIzaSyA27u_Ig_EqhOQqq3BUERrrygjjPBJxeWg';
+
+// ──────────────────────────────────────────────────────────
+// SUPABASE
+// ──────────────────────────────────────────────────────────
+const SUPABASE_URL  = 'https://wcucoqjljfwdrclvkjmk.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndjdWNvcWpsamZ3ZHJjbHZram1rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3NjgxMTQsImV4cCI6MjA4ODM0NDExNH0.AwSMguCJV0WdVR4NeRf9W_MhSrkGYMV-uLCtsCwyufY';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+// ──────────────────────────────────────────────────────────
+// STATE
+// ──────────────────────────────────────────────────────────
+let state = {
+  leads: [],
+  customers: [],
+  jobs: [],
+  nextId: { lead: 1, cust: 1, job: 1 }
+};
+
+let currentView = 'dashboard';
+let currentJobTab = 'active';
+let selectedJobCustomerId = null;
+let pendingJobCustomerCreate = false;
+let editingJobId = null;
+
+// ──────────────────────────────────────────────────────────
+// PERSISTENCE — Supabase (localStorage as offline fallback)
+// ──────────────────────────────────────────────────────────
+
+function localBackup() {
+  try { localStorage.setItem('tfcrm_v4', JSON.stringify(state)); } catch(e) {}
+}
+
+// Fast single-record save — use this for all normal operations
+async function saveOne(table, record) {
+  try {
+    await sb.from(table).upsert({ id: record.id, data: record }, { onConflict: 'id' });
+  } catch(e) { console.error('saveOne error', table, e); }
+  localBackup();
+}
+
+// Delete a record
+async function deleteRecord(table, id) {
+  try { await sb.from(table).delete().eq('id', id); } catch(e) {}
+  localBackup();
+}
+
+// save() — kept for compatibility, does a full sync
+async function save() {
+  localBackup();
+  try {
+    await sb.from('meta').upsert({ key: 'nextId', value: state.nextId }, { onConflict: 'key' });
+    await Promise.all([
+      ...state.leads.map(l => sb.from('leads').upsert({ id: l.id, data: l }, { onConflict: 'id' })),
+      ...state.customers.map(c => sb.from('customers').upsert({ id: c.id, data: c }, { onConflict: 'id' })),
+      ...state.jobs.map(j => sb.from('jobs').upsert({ id: j.id, data: j }, { onConflict: 'id' })),
+    ]);
+  } catch(e) { console.error('save error', e); }
+}
+
+function showLoadingOverlay(show) {
+  let el = document.getElementById('loading-overlay');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'loading-overlay';
+    el.style.cssText = 'position:fixed;inset:0;background:var(--bg);z-index:999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px';
+    el.innerHTML = `<div style="width:32px;height:32px;border:3px solid var(--border2);border-top-color:var(--red);border-radius:50%;animation:spin .7s linear infinite"></div><div style="color:var(--text2);font-size:14px">Loading…</div>`;
+    const style = document.createElement('style');
+    style.textContent = '@keyframes spin{to{transform:rotate(360deg)}}';
+    document.head.appendChild(style);
+    document.body.appendChild(el);
+  }
+  el.style.display = show ? 'flex' : 'none';
+}
+
+async function load() {
+  showLoadingOverlay(true);
+  try {
+    const [leadsRes, custsRes, jobsRes, metaRes] = await Promise.all([
+      sb.from('leads').select('id, data'),
+      sb.from('customers').select('id, data'),
+      sb.from('jobs').select('id, data'),
+      sb.from('meta').select('key, value').eq('key', 'nextId'),
+    ]);
+    if (leadsRes.error || custsRes.error || jobsRes.error) throw new Error('Supabase fetch failed');
+    state.leads     = (leadsRes.data  || []).map(r => r.data);
+    state.customers = (custsRes.data  || []).map(r => r.data);
+    state.jobs      = (jobsRes.data   || []).map(r => r.data);
+    if (metaRes.data && metaRes.data[0]) state.nextId = metaRes.data[0].value;
+  } catch(e) {
+    console.warn('Supabase load failed, using localStorage fallback', e);
+    try {
+      const d = localStorage.getItem('tfcrm_v4');
+      if (d) { const s = JSON.parse(d); state.leads = s.leads||[]; state.customers = s.customers||[]; state.jobs = s.jobs||[]; state.nextId = s.nextId||{lead:1,cust:1,job:1}; }
+    } catch(e2) {}
+  }
+  // migrate
+  state.jobs.forEach(j => {
+    if (!j.timeLog)   j.timeLog = [];
+    if (!j.lineItems) j.lineItems = [];
+    if (!j.history)   j.history = [];
+  });
+  showLoadingOverlay(false);
+}
+
+// ──────────────────────────────────────────────────────────
+// NAVIGATION
+// ──────────────────────────────────────────────────────────
+function showView(name, btnEl) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  const view = document.getElementById('view-' + name);
+  if (view) view.classList.add('active');
+  if (btnEl) btnEl.classList.add('active');
+  else {
+    const nb = document.getElementById('nav-' + name);
+    if (nb) nb.classList.add('active');
+  }
+  currentView = name;
+  const titles = {
+    dashboard:'Dashboard', leads:'Leads', customers:'Customers',
+    jobs:'Jobs', 'job-detail':'Job Detail', 'customer-detail':'Customer Detail',
+    'lead-detail':'Lead Detail'
+  };
+  document.getElementById('page-title').textContent = titles[name] || '';
+  // render
+  if (name === 'dashboard') renderDashboard();
+  if (name === 'leads') renderLeads();
+  if (name === 'customers') renderCustomers();
+  if (name === 'jobs') renderJobs();
+
+  const actions = document.getElementById('header-actions');
+  actions.innerHTML = '';
+  if (name === 'job-detail' && currentJobId) {
+    const job = state.jobs.find(j => j.id === currentJobId);
+    if (job) {
+      actions.innerHTML = `<button class="btn btn-ghost btn-sm" onclick="openEditJob('${job.id}')">Edit</button>`;
+    }
+  }
+}
+
+function backToJobs() { showView('jobs'); }
+function backToCustomers() { showView('customers'); }
+function backToLeads() { showView('leads'); }
+
+// ──────────────────────────────────────────────────────────
+// MODALS
+// ──────────────────────────────────────────────────────────
+function openModal(id) {
+  document.getElementById(id).classList.add('open');
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+// close on overlay click
+document.querySelectorAll('.modal-overlay').forEach(o => {
+  o.addEventListener('click', e => { if (e.target === o) closeModal(o.id); });
+});
+
+// ──────────────────────────────────────────────────────────
+// GOOGLE PLACES AUTOCOMPLETE
+// ──────────────────────────────────────────────────────────
+let placesReady = false;
+const placesQueue = [];
+
+function initPlaces() {
+  placesReady = true;
+  placesQueue.forEach(fn => fn());
+  placesQueue.length = 0;
+}
+
+function attachPlaces(inputEl, onSelect) {
+  if (!inputEl) return;
+  const run = () => {
+    const ac = new google.maps.places.Autocomplete(inputEl, {
+      types: ['address'],
+      componentRestrictions: { country: 'us' }
+    });
+    ac.addListener('place_changed', () => {
+      const p = ac.getPlace();
+      if (p && p.formatted_address) {
+        inputEl.value = p.formatted_address;
+        if (onSelect) onSelect(p.formatted_address);
+      }
+    });
+  };
+  if (placesReady) run();
+  else placesQueue.push(run);
+}
+
+// attach after modals are in DOM
+function setupAllPlaces() {
+  attachPlaces(document.getElementById('lead-address'));
+  attachPlaces(document.getElementById('cust-address'));
+  attachPlaces(document.getElementById('job-address'));
+  attachPlaces(document.getElementById('ic-address'));
+}
+window.addEventListener('DOMContentLoaded', setupAllPlaces);
+
+// ──────────────────────────────────────────────────────────
+// HELPERS
+// ──────────────────────────────────────────────────────────
+function uid(prefix) {
+  return prefix + '_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
+}
+function fmtDate(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+}
+function fmtTime(t) { return t || '—'; }
+function fmtMoney(n) {
+  return '$' + Number(n||0).toLocaleString('en-US', { minimumFractionDigits:2, maximumFractionDigits:2 });
+}
+function calcDuration(inT, outT) {
+  if (!inT || !outT) return null;
+  const [ih,im] = inT.split(':').map(Number);
+  const [oh,om] = outT.split(':').map(Number);
+  const mins = (oh*60+om) - (ih*60+im);
+  if (mins <= 0) return null;
+  const h = Math.floor(mins/60), m = mins%60;
+  return { hrs: mins/60, label: h + 'h ' + (m?m+'m':'') };
+}
+function totalHours(timeLog) {
+  return timeLog.reduce((sum, e) => {
+    const d = calcDuration(e.clockIn, e.clockOut);
+    return sum + (d ? d.hrs : 0);
+  }, 0);
+}
+function totalLineItems(lineItems) {
+  return (lineItems||[]).reduce((sum, i) => sum + (parseFloat(i.total)||0), 0);
+}
+function getCustomerName(id) {
+  const c = state.customers.find(c => c.id === id);
+  return c ? c.name : '(Unknown)';
+}
+function statusBadge(s) {
+  const map = { lead:'lead', active:'active', estimate:'estimate', closed:'closed', scheduled:'badge' };
+  return `<span class="badge ${map[s]||''}">${s||'—'}</span>`;
+}
+function today() {
+  return new Date().toISOString().slice(0,10);
+}
+function nowTime() {
+  const n = new Date();
+  return n.getHours().toString().padStart(2,'0') + ':' + n.getMinutes().toString().padStart(2,'0');
+}
+function hasActiveClockIn(job) {
+  return job.timeLog.some(e => e.clockIn && !e.clockOut);
+}
+function getActiveClockIns(job) {
+  return job.timeLog.filter(e => e.clockIn && !e.clockOut);
+}
+
+// ──────────────────────────────────────────────────────────
+// DASHBOARD
+// ──────────────────────────────────────────────────────────
+function renderDashboard() {
+  const activeJobs = state.jobs.filter(j => j.status === 'active' || j.status === 'scheduled');
+  const leads = state.leads.filter(l => l.status !== 'converted');
+  const totalRev = state.jobs.reduce((s,j) => s + totalLineItems(j.lineItems), 0);
+
+  document.getElementById('stat-strip').innerHTML = `
+    <div class="stat-card"><div class="stat-num" style="color:var(--red)">${activeJobs.length}</div><div class="stat-lbl">Active Jobs</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:var(--yellow)">${leads.length}</div><div class="stat-lbl">Open Leads</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:var(--green)">${state.customers.length}</div><div class="stat-lbl">Customers</div></div>
+  `;
+
+  const daj = document.getElementById('dash-active-jobs');
+  if (!activeJobs.length) {
+    daj.innerHTML = '<div class="empty-state" style="padding:20px 0"><p>No active jobs</p></div>';
+  } else {
+    daj.innerHTML = activeJobs.slice(0,3).map(j => jobCard(j, true)).join('');
+  }
+
+  const dl = document.getElementById('dash-leads');
+  const recentLeads = [...state.leads].sort((a,b) => b.createdAt - a.createdAt).slice(0,3);
+  if (!recentLeads.length) {
+    dl.innerHTML = '<div class="empty-state" style="padding:20px 0"><p>No leads yet</p></div>';
+  } else {
+    dl.innerHTML = recentLeads.map(l => leadCard(l, true)).join('');
+  }
+}
+
+// ──────────────────────────────────────────────────────────
+// LEADS
+// ──────────────────────────────────────────────────────────
+function renderLeads() {
+  const q = (document.getElementById('lead-search')?.value || '').toLowerCase();
+  let leads = state.leads.filter(l =>
+    !q || l.name.toLowerCase().includes(q) || (l.address||'').toLowerCase().includes(q) || (l.phone||'').includes(q)
+  );
+  document.getElementById('lead-count').textContent = leads.length + ' Lead' + (leads.length !== 1 ? 's' : '');
+  document.getElementById('lead-list').innerHTML = leads.length
+    ? leads.map(l => leadCard(l)).join('')
+    : '<div class="empty-state"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg><p>No leads yet. Tap + to add one.</p></div>';
+}
+
+function leadCard(l, compact) {
+  return `<div class="card" onclick="openLeadDetail('${l.id}')">
+    <div class="card-header">
+      <div class="card-title">${l.name}</div>
+      ${statusBadge(l.status||'lead')}
+    </div>
+    <div class="card-sub">${l.phone||''} ${l.phone&&l.address?'·':''} ${l.address||''}</div>
+    ${!compact && l.issue ? `<div class="card-sub" style="margin-top:4px;color:var(--text)">${l.issue.slice(0,80)}${l.issue.length>80?'…':''}</div>` : ''}
+    <div class="card-meta">${l.source ? `<span class="badge">${l.source}</span>` : ''}
+      <span style="font-size:11px;color:var(--text3)">${fmtDate(l.createdAt)}</span>
+    </div>
+  </div>`;
+}
+
+function saveLead() {
+  const name = document.getElementById('lead-name').value.trim();
+  if (!name) { alert('Name required'); return; }
+  const lead = {
+    id: uid('lead'),
+    name,
+    phone: document.getElementById('lead-phone').value.trim(),
+    email: document.getElementById('lead-email').value.trim(),
+    address: document.getElementById('lead-address').value.trim(),
+    issue: document.getElementById('lead-issue').value.trim(),
+    source: document.getElementById('lead-source').value,
+    status: 'lead',
+    createdAt: Date.now()
+  };
+  state.leads.unshift(lead);
+  saveOne('leads', lead);
+  closeModal('modal-lead');
+  clearLeadForm();
+  if (currentView === 'leads') renderLeads();
+  if (currentView === 'dashboard') renderDashboard();
+}
+
+function clearLeadForm() {
+  ['lead-name','lead-phone','lead-email','lead-address','lead-issue'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('lead-source').selectedIndex = 0;
+}
+
+let currentLeadId = null;
+function openLeadDetail(id) {
+  currentLeadId = id;
+  const lead = state.leads.find(l => l.id === id);
+  if (!lead) return;
+  const el = document.getElementById('lead-detail-content');
+  const relatedJobs = state.jobs.filter(j => j.leadId === id);
+  el.innerHTML = `
+    <button onclick="backToLeads()" style="display:flex;align-items:center;gap:6px;color:var(--text2);font-size:14px;background:none;padding:0;margin-bottom:14px">
+      <svg width="16" height="16" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+      Back to Leads
+    </button>
+    <div class="card" style="margin-bottom:14px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px">
+        <div>
+          <div style="font-size:20px;font-weight:700">${lead.name}</div>
+          ${statusBadge(lead.status||'lead')}
+        </div>
+      </div>
+      <div class="info-grid">
+        <div class="info-cell"><div class="lbl">Phone</div><div class="val">${lead.phone||'—'}</div></div>
+        <div class="info-cell"><div class="lbl">Email</div><div class="val" style="font-size:13px;word-break:break-all">${lead.email||'—'}</div></div>
+        <div class="info-cell" style="grid-column:1/-1"><div class="lbl">Address</div><div class="val">${lead.address||'—'}</div></div>
+        <div class="info-cell"><div class="lbl">Source</div><div class="val">${lead.source||'—'}</div></div>
+        <div class="info-cell"><div class="lbl">Created</div><div class="val">${fmtDate(lead.createdAt)}</div></div>
+        ${lead.issue ? `<div class="info-cell" style="grid-column:1/-1"><div class="lbl">Issue</div><div class="val">${lead.issue}</div></div>` : ''}
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <button class="btn btn-primary" onclick="convertLeadToJob('${lead.id}')">
+        <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg>
+        Convert to Job
+      </button>
+      <button class="btn btn-secondary" onclick="convertLeadToCustomer('${lead.id}')">Convert to Customer</button>
+    </div>
+    ${relatedJobs.length ? `
+      <div class="detail-section-title">Related Jobs</div>
+      ${relatedJobs.map(j => jobCard(j, true)).join('')}
+    ` : ''}
+    <button class="btn btn-danger" style="margin-top:8px" onclick="deleteLead('${lead.id}')">Delete Lead</button>
+  `;
+  document.getElementById('page-title').textContent = lead.name;
+  showView('lead-detail');
+}
+
+function deleteLead(id) {
+  if (!confirm('Delete this lead?')) return;
+  state.leads = state.leads.filter(l => l.id !== id);
+  deleteRecord('leads', id);
+  showView('leads');
+}
+
+function convertLeadToCustomer(leadId) {
+  const lead = state.leads.find(l => l.id === leadId);
+  if (!lead) return;
+  // pre-fill customer modal
+  document.getElementById('cust-name').value = lead.name;
+  document.getElementById('cust-phone').value = lead.phone || '';
+  document.getElementById('cust-email').value = lead.email || '';
+  document.getElementById('cust-address').value = lead.address || '';
+  document.getElementById('modal-customer-title').textContent = 'Convert Lead to Customer';
+  pendingLeadConvert = leadId;
+  openModal('modal-customer');
+}
+let pendingLeadConvert = null;
+
+function convertLeadToJob(leadId) {
+  const lead = state.leads.find(l => l.id === leadId);
+  if (!lead) return;
+  // open new job modal, pre-select customer if exists
+  resetJobModal();
+  document.getElementById('job-desc').value = lead.issue || '';
+  document.getElementById('job-address').value = lead.address || '';
+  // try to match customer
+  const cust = state.customers.find(c => c.phone === lead.phone || c.name.toLowerCase() === lead.name.toLowerCase());
+  if (cust) selectJobCustomer(cust);
+  else {
+    document.getElementById('job-cust-search').value = lead.name;
+  }
+  openModal('modal-job');
+}
+
+// ──────────────────────────────────────────────────────────
+// CUSTOMERS
+// ──────────────────────────────────────────────────────────
+function renderCustomers() {
+  const q = (document.getElementById('cust-search')?.value || '').toLowerCase();
+  let custs = state.customers.filter(c =>
+    !q || c.name.toLowerCase().includes(q) || (c.address||'').toLowerCase().includes(q) || (c.phone||'').includes(q)
+  );
+  document.getElementById('cust-count').textContent = custs.length + ' Customer' + (custs.length !== 1 ? 's' : '');
+  document.getElementById('cust-list').innerHTML = custs.length
+    ? custs.map(c => custCard(c)).join('')
+    : '<div class="empty-state"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2 20c0-4 3.1-7 7-7s7 3 7 7"/><circle cx="18" cy="9" r="3"/><path d="M22 20c0-3-1.8-5.5-4-6"/></svg><p>No customers yet.</p></div>';
+}
+
+function custCard(c) {
+  const jobs = state.jobs.filter(j => j.customerId === c.id);
+  return `<div class="card" onclick="openCustomerDetail('${c.id}')">
+    <div class="card-header">
+      <div class="card-title">${c.name}</div>
+      ${c.maintenancePlan ? '<span class="badge red">Plan Member</span>' : ''}
+    </div>
+    <div class="card-sub">${c.phone||''} ${c.phone&&c.address?'·':''} ${c.address||''}</div>
+    <div class="card-meta">
+      <span class="badge">${jobs.length} job${jobs.length!==1?'s':''}</span>
+      <span style="font-size:11px;color:var(--text3)">${fmtDate(c.createdAt)}</span>
+    </div>
+  </div>`;
+}
+
+function saveCustomer() {
+  const name = document.getElementById('cust-name').value.trim();
+  if (!name) { alert('Name required'); return; }
+  const cust = {
+    id: uid('cust'),
+    name,
+    phone: document.getElementById('cust-phone').value.trim(),
+    email: document.getElementById('cust-email').value.trim(),
+    address: document.getElementById('cust-address').value.trim(),
+    billing: document.getElementById('cust-billing').value.trim(),
+    maintenancePlan: document.getElementById('cust-plan-toggle').classList.contains('on'),
+    notes: document.getElementById('cust-notes').value.trim(),
+    createdAt: Date.now()
+  };
+  state.customers.unshift(cust);
+  saveOne('customers', cust);
+
+  // handle lead conversion
+  if (pendingLeadConvert) {
+    const lead = state.leads.find(l => l.id === pendingLeadConvert);
+    if (lead) lead.status = 'converted';
+    pendingLeadConvert = null;
+  }
+
+  closeModal('modal-customer');
+  clearCustForm();
+  if (currentView === 'customers') renderCustomers();
+  if (currentView === 'dashboard') renderDashboard();
+}
+
+function clearCustForm() {
+  ['cust-name','cust-phone','cust-email','cust-address','cust-billing','cust-notes'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('cust-plan-toggle').classList.remove('on');
+  document.getElementById('modal-customer-title').textContent = 'New Customer';
+}
+
+let currentCustomerId = null;
+function openCustomerDetail(id) {
+  currentCustomerId = id;
+  const c = state.customers.find(c => c.id === id);
+  if (!c) return;
+  const jobs = state.jobs.filter(j => j.customerId === id);
+  const el = document.getElementById('customer-detail-content');
+  el.innerHTML = `
+    <button onclick="backToCustomers()" style="display:flex;align-items:center;gap:6px;color:var(--text2);font-size:14px;background:none;padding:0;margin-bottom:14px">
+      <svg width="16" height="16" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+      Back to Customers
+    </button>
+    <div class="card" style="margin-bottom:14px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px">
+        <div>
+          <div style="font-size:20px;font-weight:700">${c.name}</div>
+          ${c.maintenancePlan ? '<span class="badge red" style="margin-top:4px;display:inline-block">Maintenance Plan</span>' : ''}
+        </div>
+      </div>
+      <div class="info-grid">
+        <div class="info-cell"><div class="lbl">Phone</div><div class="val"><a href="tel:${c.phone}" style="color:var(--blue)">${c.phone||'—'}</a></div></div>
+        <div class="info-cell"><div class="lbl">Email</div><div class="val" style="font-size:13px;word-break:break-all"><a href="mailto:${c.email}" style="color:var(--blue)">${c.email||'—'}</a></div></div>
+        <div class="info-cell" style="grid-column:1/-1"><div class="lbl">Service Address</div><div class="val">${c.address||'—'}</div></div>
+        ${c.billing ? `<div class="info-cell" style="grid-column:1/-1"><div class="lbl">Billing Address</div><div class="val">${c.billing}</div></div>` : ''}
+        ${c.notes ? `<div class="info-cell" style="grid-column:1/-1"><div class="lbl">Notes</div><div class="val">${c.notes}</div></div>` : ''}
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <button class="btn btn-primary" onclick="openNewJobForCustomer('${c.id}')">
+        <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        New Job
+      </button>
+    </div>
+    <div class="detail-section-title">Job History (${jobs.length})</div>
+    ${jobs.length ? jobs.map(j => jobCard(j, true)).join('') : '<div style="color:var(--text3);font-size:14px;padding:12px 0">No jobs yet</div>'}
+    <button class="btn btn-danger" style="margin-top:12px" onclick="deleteCustomer('${c.id}')">Delete Customer</button>
+  `;
+  document.getElementById('page-title').textContent = c.name;
+  showView('customer-detail');
+}
+
+function deleteCustomer(id) {
+  if (!confirm('Delete this customer and all related records?')) return;
+  state.customers = state.customers.filter(c => c.id !== id);
+  state.jobs = state.jobs.filter(j => j.customerId !== id);
+  deleteRecord('customers', id);
+  // also delete related jobs from supabase
+  state.jobs.filter(j => j.customerId === id).forEach(j => deleteRecord('jobs', j.id));
+  showView('customers');
+}
+
+function openNewJobForCustomer(custId) {
+  resetJobModal();
+  const c = state.customers.find(c => c.id === custId);
+  if (c) {
+    selectJobCustomer(c);
+    document.getElementById('job-address').value = c.address || '';
+  }
+  openModal('modal-job');
+}
+
+// ──────────────────────────────────────────────────────────
+// JOBS
+// ──────────────────────────────────────────────────────────
+function setJobTab(tab, el) {
+  currentJobTab = tab;
+  document.querySelectorAll('.tab-bar .tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderJobs();
+}
+
+function renderJobs() {
+  const q = (document.getElementById('job-search')?.value || '').toLowerCase();
+  let jobs = state.jobs;
+  if (currentJobTab !== 'all') jobs = jobs.filter(j => j.status === currentJobTab);
+  if (q) jobs = jobs.filter(j =>
+    (j.description||'').toLowerCase().includes(q) ||
+    getCustomerName(j.customerId).toLowerCase().includes(q) ||
+    (j.address||'').toLowerCase().includes(q)
+  );
+  document.getElementById('job-count').textContent = jobs.length + ' Job' + (jobs.length !== 1 ? 's' : '');
+  document.getElementById('job-list').innerHTML = jobs.length
+    ? jobs.map(j => jobCard(j)).join('')
+    : '<div class="empty-state"><svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg><p>No jobs in this view.</p></div>';
+}
+
+function jobCard(j, compact) {
+  const custName = getCustomerName(j.customerId);
+  const hrs = totalHours(j.timeLog);
+  const total = totalLineItems(j.lineItems);
+  const clocked = hasActiveClockIn(j);
+  return `<div class="card" onclick="openJobDetail('${j.id}')">
+    <div class="card-header">
+      <div class="card-title">${j.jobNumber ? `#${j.jobNumber} · ` : ''}${j.description ? j.description.slice(0,40)+(j.description.length>40?'…':'') : '(No description)'}</div>
+      ${statusBadge(j.status)}
+    </div>
+    <div class="card-sub">${custName}${j.address?' · '+j.address.split(',')[0]:''}</div>
+    <div class="card-meta">
+      ${j.techs&&j.techs.length ? j.techs.map(t=>`<span class="badge">${t}</span>`).join('') : ''}
+      ${hrs > 0 ? `<span class="badge">${hrs.toFixed(1)}h</span>` : ''}
+      ${total > 0 ? `<span class="badge" style="color:var(--green)">${fmtMoney(total)}</span>` : ''}
+      ${clocked ? '<span class="clock-indicator">Clocked In</span>' : ''}
+      ${j.scheduledDate ? `<span style="font-size:11px;color:var(--text3)">${fmtDate(j.scheduledDate)}</span>` : ''}
+    </div>
+  </div>`;
+}
+
+function saveJob() {
+  const desc = document.getElementById('job-desc').value.trim();
+  if (!desc) { alert('Description required'); return; }
+  if (!selectedJobCustomerId) { alert('Please select a customer'); return; }
+
+  const techs = [...document.querySelectorAll('#job-tech-checkboxes input:checked')].map(i => i.value);
+  let jobToSave = null;
+
+  if (editingJobId) {
+    const job = state.jobs.find(j => j.id === editingJobId);
+    if (job) {
+      job.customerId = selectedJobCustomerId;
+      job.description = desc;
+      job.address = document.getElementById('job-address').value.trim();
+      job.type = document.getElementById('job-type').value;
+      job.scheduledDate = document.getElementById('job-date').value;
+      job.priority = document.getElementById('job-priority').value;
+      job.techs = techs;
+      job.status = document.getElementById('job-status').value;
+      job.notes = document.getElementById('job-notes').value.trim();
+      job.history.push({ action: 'edited', at: Date.now() });
+      jobToSave = job;
+    }
+  } else {
+    const jobNum = ++state.nextId.job;
+    const job = {
+      id: uid('job'),
+      jobNumber: jobNum,
+      customerId: selectedJobCustomerId,
+      description: desc,
+      address: document.getElementById('job-address').value.trim(),
+      type: document.getElementById('job-type').value,
+      scheduledDate: document.getElementById('job-date').value,
+      priority: document.getElementById('job-priority').value,
+      techs,
+      status: document.getElementById('job-status').value || 'active',
+      notes: document.getElementById('job-notes').value.trim(),
+      timeLog: [],
+      lineItems: [],
+      history: [{ action: 'created', at: Date.now() }],
+      createdAt: Date.now()
+    };
+    state.jobs.unshift(job);
+    jobToSave = job;
+  }
+  if (jobToSave) saveOne('jobs', jobToSave);
+  sb.from('meta').upsert({ key: 'nextId', value: state.nextId }, { onConflict: 'key' });
+  editingJobId = null;
+  closeModal('modal-job');
+  resetJobModal();
+  if (currentView === 'jobs') renderJobs();
+  if (currentView === 'dashboard') renderDashboard();
+}
+
+function resetJobModal() {
+  selectedJobCustomerId = null;
+  editingJobId = null;
+  document.getElementById('job-cust-search').value = '';
+  document.getElementById('job-cust-results').innerHTML = '';
+  document.getElementById('job-cust-selected').style.display = 'none';
+  document.getElementById('job-cust-no-match').style.display = 'none';
+  document.getElementById('job-inline-cust').style.display = 'none';
+  ['job-desc','job-address','job-notes','job-date'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('job-type').selectedIndex = 0;
+  document.getElementById('job-priority').selectedIndex = 0;
+  document.getElementById('job-status').selectedIndex = 0;
+  document.querySelectorAll('#job-tech-checkboxes input').forEach(i => i.checked = false);
+  document.getElementById('modal-job-title').textContent = 'New Job / Work Order';
+}
+
+function openEditJob(jobId) {
+  const job = state.jobs.find(j => j.id === jobId);
+  if (!job) return;
+  resetJobModal();
+  editingJobId = jobId;
+  document.getElementById('modal-job-title').textContent = 'Edit Job #' + job.jobNumber;
+  const cust = state.customers.find(c => c.id === job.customerId);
+  if (cust) selectJobCustomer(cust);
+  document.getElementById('job-desc').value = job.description || '';
+  document.getElementById('job-address').value = job.address || '';
+  document.getElementById('job-type').value = job.type || '';
+  document.getElementById('job-date').value = job.scheduledDate || '';
+  document.getElementById('job-priority').value = job.priority || 'normal';
+  document.getElementById('job-status').value = job.status || 'active';
+  document.getElementById('job-notes').value = job.notes || '';
+  if (job.techs) {
+    document.querySelectorAll('#job-tech-checkboxes input').forEach(i => {
+      i.checked = job.techs.includes(i.value);
+    });
+  }
+  openModal('modal-job');
+}
+
+// ──────────────────────────────────────────────────────────
+// JOB CUSTOMER SEARCH
+// ──────────────────────────────────────────────────────────
+function populateJobCustomerDropdown() {
+  const q = document.getElementById('job-cust-search').value.trim().toLowerCase();
+  const res = document.getElementById('job-cust-results');
+  const noMatch = document.getElementById('job-cust-no-match');
+  if (!q) { res.innerHTML = ''; noMatch.style.display = 'none'; return; }
+  const matches = state.customers.filter(c => c.name.toLowerCase().includes(q) || (c.phone||'').includes(q));
+  if (matches.length) {
+    res.innerHTML = matches.slice(0,5).map(c => `
+      <div onclick="selectJobCustomer(${JSON.stringify(c).replace(/"/g,'&quot;')})" style="padding:9px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin-top:4px;cursor:pointer;font-size:14px">
+        <div style="font-weight:600">${c.name}</div>
+        <div style="font-size:12px;color:var(--text2)">${c.phone||''} ${c.address||''}</div>
+      </div>
+    `).join('');
+    noMatch.style.display = 'none';
+  } else {
+    res.innerHTML = '';
+    noMatch.style.display = 'block';
+  }
+}
+
+function selectJobCustomer(c) {
+  if (typeof c === 'string') c = JSON.parse(c);
+  selectedJobCustomerId = c.id;
+  document.getElementById('job-cust-results').innerHTML = '';
+  document.getElementById('job-cust-no-match').style.display = 'none';
+  document.getElementById('job-cust-search').value = '';
+  const sel = document.getElementById('job-cust-selected');
+  sel.style.display = 'flex';
+  sel.innerHTML = `<div><div style="font-weight:600">${c.name}</div><div style="font-size:12px;color:var(--text2)">${c.phone||''}${c.address?' · '+c.address.split(',')[0]:''}</div></div>
+    <button onclick="clearSelectedCustomer()" style="background:none;color:var(--text3);font-size:18px;padding:0 4px">×</button>`;
+  // auto-fill address if job address empty
+  if (!document.getElementById('job-address').value && c.address) {
+    document.getElementById('job-address').value = c.address;
+  }
+}
+
+function clearSelectedCustomer() {
+  selectedJobCustomerId = null;
+  document.getElementById('job-cust-selected').style.display = 'none';
+}
+
+function openInlineCustomerCreate() {
+  document.getElementById('job-inline-cust').style.display = 'block';
+  document.getElementById('job-cust-no-match').style.display = 'none';
+  const q = document.getElementById('job-cust-search').value.trim();
+  document.getElementById('ic-name').value = q;
+}
+function closeInlineCustomerCreate() {
+  document.getElementById('job-inline-cust').style.display = 'none';
+  document.getElementById('job-cust-no-match').style.display = 'none';
+}
+function saveInlineCustomer() {
+  const name = document.getElementById('ic-name').value.trim();
+  if (!name) { alert('Name required'); return; }
+  const cust = {
+    id: uid('cust'),
+    name,
+    phone: document.getElementById('ic-phone').value.trim(),
+    email: document.getElementById('ic-email').value.trim(),
+    address: document.getElementById('ic-address').value.trim(),
+    maintenancePlan: document.getElementById('ic-plan-toggle').classList.contains('on'),
+    createdAt: Date.now()
+  };
+  state.customers.unshift(cust);
+  saveOne('customers', cust);
+  closeInlineCustomerCreate();
+  selectJobCustomer(cust);
+  // clear inline fields
+  ['ic-name','ic-phone','ic-email','ic-address'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('ic-plan-toggle').classList.remove('on');
+}
+
+// ──────────────────────────────────────────────────────────
+// JOB DETAIL
+// ──────────────────────────────────────────────────────────
+let currentJobId = null;
+
+function openJobDetail(id) {
+  currentJobId = id;
+  renderJobDetail();
+  document.getElementById('header-actions').innerHTML =
+    `<button class="btn btn-ghost btn-sm" onclick="openEditJob('${id}')">Edit</button>`;
+  showView('job-detail');
+}
+
+function renderJobDetail() {
+  const id = currentJobId;
+  const job = state.jobs.find(j => j.id === id);
+  if (!job) return;
+  const cust = state.customers.find(c => c.id === job.customerId);
+  const hrs = totalHours(job.timeLog);
+  const lineTotal = totalLineItems(job.lineItems);
+  const activeEntries = getActiveClockIns(job);
+
+  document.getElementById('page-title').textContent = `Job #${job.jobNumber}`;
+
+  let timeTableRows = '';
+  if (job.timeLog.length) {
+    // sort by date then clock-in
+    const sorted = [...job.timeLog].sort((a,b) => (a.date+a.clockIn).localeCompare(b.date+b.clockIn));
+    let visitNum = 1;
+    timeTableRows = sorted.map((e, i) => {
+      const dur = calcDuration(e.clockIn, e.clockOut);
+      return `<tr>
+        <td>${e.visitNum || visitNum++}</td>
+        <td style="font-weight:500">${e.tech}</td>
+        <td>${fmtDate(e.date)}</td>
+        <td>${fmtTime(e.clockIn)}</td>
+        <td>${e.clockOut ? fmtTime(e.clockOut) : '<span class="clock-indicator">Active</span>'}</td>
+        <td>${dur ? dur.label : '—'}</td>
+        <td>
+          ${!e.clockOut ? `<button class="btn btn-danger btn-sm" onclick="openClockOut('${id}','${e.id}','${e.tech}')">Out</button>` : ''}
+          <button onclick="deleteTimeEntry('${id}','${e.id}')" style="background:none;color:var(--text3);font-size:18px;padding:0 4px;margin-left:4px">×</button>
+        </td>
+      </tr>`;
+    }).join('');
+    const totalMins = job.timeLog.reduce((s,e) => {
+      const d = calcDuration(e.clockIn, e.clockOut);
+      return s + (d ? Math.round(d.hrs * 60) : 0);
+    }, 0);
+    const th = Math.floor(totalMins/60), tm = totalMins%60;
+    timeTableRows += `<tr class="total-row"><td colspan="5">Total</td><td>${th}h ${tm?tm+'m':''}</td><td></td></tr>`;
+  }
+
+  const lineItemsHTML = job.lineItems.length ? job.lineItems.map(li => `
+    <div class="line-item">
+      <div>
+        <div class="li-name">${li.description}</div>
+        <div style="font-size:12px;color:var(--text3)">${li.type}${li.qty?' · '+li.qty+(li.type==='labor'?' hr':' x'):''}${li.rate?' @ '+fmtMoney(li.rate):''}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="li-amt">${fmtMoney(li.total)}</div>
+        <button onclick="deleteLineItem('${id}','${li.id}')" style="background:none;color:var(--text3);font-size:18px;padding:0">×</button>
+      </div>
+    </div>
+  `).join('') : '<div style="color:var(--text3);font-size:13px;padding:8px 0">No items yet</div>';
+
+  const el = document.getElementById('job-detail-content');
+  el.innerHTML = `
+    <button onclick="backToJobs()" style="display:flex;align-items:center;gap:6px;color:var(--text2);font-size:14px;background:none;padding:0;margin-bottom:14px">
+      <svg width="16" height="16" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+      Back to Jobs
+    </button>
+
+    <!-- STATUS + INFO -->
+    <div class="card" style="margin-bottom:10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div>
+          <div style="font-size:18px;font-weight:700">Job #${job.jobNumber}</div>
+          <div style="font-size:13px;color:var(--text2);margin-top:2px">${job.type||'General'}</div>
+        </div>
+        ${statusBadge(job.status)}
+      </div>
+      <div style="font-size:14px;margin-bottom:10px">${job.description||''}</div>
+      <div class="info-grid">
+        <div class="info-cell"><div class="lbl">Customer</div><div class="val" onclick="openCustomerDetail('${cust?.id}')" style="color:var(--blue);cursor:pointer">${cust?.name||'—'}</div></div>
+        <div class="info-cell"><div class="lbl">Phone</div><div class="val"><a href="tel:${cust?.phone}" style="color:var(--blue)">${cust?.phone||'—'}</a></div></div>
+        <div class="info-cell" style="grid-column:1/-1"><div class="lbl">Address</div><div class="val">${job.address||cust?.address||'—'}</div></div>
+        <div class="info-cell"><div class="lbl">Scheduled</div><div class="val">${fmtDate(job.scheduledDate)}</div></div>
+        <div class="info-cell"><div class="lbl">Priority</div><div class="val">${job.priority||'Normal'}</div></div>
+        ${job.techs?.length ? `<div class="info-cell" style="grid-column:1/-1"><div class="lbl">Techs</div><div class="val">${job.techs.join(', ')}</div></div>` : ''}
+        ${cust?.maintenancePlan ? `<div class="info-cell" style="grid-column:1/-1"><div class="val"><span class="badge red">Maintenance Plan</span></div></div>` : ''}
+      </div>
+    </div>
+
+    <!-- STATUS CHANGE -->
+    <div class="card" style="margin-bottom:10px">
+      <div class="detail-section-title" style="margin-bottom:10px">Status</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${['active','estimate','scheduled','closed'].map(s =>
+          `<button class="btn btn-sm ${job.status===s?'btn-primary':'btn-ghost'}" onclick="changeJobStatus('${id}','${s}')">${s.charAt(0).toUpperCase()+s.slice(1)}</button>`
+        ).join('')}
+      </div>
+    </div>
+
+    <!-- TIME LOG -->
+    <div class="card" style="margin-bottom:10px">
+      <div class="detail-section-title">
+        <span>Time Log${hrs>0?' · '+hrs.toFixed(1)+'h total':''}</span>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-sm btn-secondary" onclick="openClockInModal('${id}')">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            Clock In
+          </button>
+          <button class="btn btn-sm btn-ghost" onclick="openManualTime('${id}')">Manual</button>
+        </div>
+      </div>
+      ${activeEntries.length ? `
+        <div style="background:rgba(46,204,113,.08);border:1px solid rgba(46,204,113,.2);border-radius:8px;padding:10px;margin-bottom:10px">
+          <div style="font-size:12px;color:var(--green);font-weight:700;margin-bottom:6px">Currently Clocked In</div>
+          ${activeEntries.map(e => `
+            <div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;margin-bottom:4px">
+              <span><strong>${e.tech}</strong> since ${fmtTime(e.clockIn)}</span>
+              <button class="btn btn-danger btn-sm" onclick="openClockOut('${id}','${e.id}','${e.tech}')">Clock Out</button>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+      ${job.timeLog.length ? `
+        <div style="overflow-x:auto">
+          <table class="time-table">
+            <thead><tr><th>#</th><th>Tech</th><th>Date</th><th>In</th><th>Out</th><th>Duration</th><th></th></tr></thead>
+            <tbody>${timeTableRows}</tbody>
+          </table>
+        </div>
+      ` : `<div style="color:var(--text3);font-size:13px;padding:4px 0">No time logged. Clock in to begin.</div>`}
+    </div>
+
+    <!-- LINE ITEMS -->
+    <div class="card" style="margin-bottom:10px">
+      <div class="detail-section-title">
+        <span>Materials & Labor</span>
+        <button class="btn btn-sm btn-secondary" onclick="openAddLineItem('${id}')">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Item
+        </button>
+      </div>
+      ${lineItemsHTML}
+      ${job.lineItems.length ? `<div class="line-total"><span>Total</span><span style="color:var(--green)">${fmtMoney(lineTotal)}</span></div>` : ''}
+    </div>
+
+    <!-- NOTES -->
+    ${job.notes ? `<div class="card" style="margin-bottom:10px">
+      <div class="detail-section-title" style="margin-bottom:6px">Internal Notes</div>
+      <div style="font-size:14px;color:var(--text2);white-space:pre-wrap">${job.notes}</div>
+    </div>` : ''}
+
+    <!-- CONVERT TO ESTIMATE / BACK TO ACTIVE -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+      ${job.status !== 'estimate' ? `<button class="btn btn-secondary btn-sm" onclick="changeJobStatus('${id}','estimate')">Convert to Estimate</button>` : ''}
+      ${job.status === 'estimate' ? `<button class="btn btn-success btn-sm" onclick="changeJobStatus('${id}','active')">Approve → Active</button>` : ''}
+      ${job.status !== 'closed' ? `<button class="btn btn-ghost btn-sm" onclick="changeJobStatus('${id}','closed')">Close Job</button>` : ''}
+    </div>
+
+    <button class="btn btn-danger" style="margin-bottom:16px" onclick="deleteJob('${id}')">Delete Job</button>
+  `;
+}
+
+function changeJobStatus(jobId, newStatus) {
+  const job = state.jobs.find(j => j.id === jobId);
+  if (!job) return;
+  job.status = newStatus;
+  job.history.push({ action: 'status_change', to: newStatus, at: Date.now() });
+  saveOne('jobs', job);
+  if (currentView === 'job-detail') renderJobDetail();
+  if (currentView === 'jobs') renderJobs();
+}
+
+function deleteJob(id) {
+  if (!confirm('Delete this job?')) return;
+  state.jobs = state.jobs.filter(j => j.id !== id);
+  deleteRecord('jobs', id);
+  showView('jobs');
+}
+
+// ──────────────────────────────────────────────────────────
+// CLOCK IN / OUT
+// ──────────────────────────────────────────────────────────
+function openClockInModal(jobId) {
+  document.getElementById('ci-job-id').value = jobId;
+  document.getElementById('ci-date').value = today();
+  document.getElementById('ci-time').value = nowTime();
+  document.getElementById('ci-notes').value = '';
+  openModal('modal-clockin');
+}
+
+function saveClockIn() {
+  const jobId = document.getElementById('ci-job-id').value;
+  const tech = document.getElementById('ci-tech').value;
+  const date = document.getElementById('ci-date').value;
+  const time = document.getElementById('ci-time').value;
+  if (!tech || !date || !time) { alert('Tech, date, and clock-in time required'); return; }
+  const job = state.jobs.find(j => j.id === jobId);
+  if (!job) return;
+  // check if this tech already clocked in
+  const existing = job.timeLog.find(e => e.tech === tech && e.clockIn && !e.clockOut);
+  if (existing) { alert(tech + ' is already clocked in. Clock out first.'); return; }
+  const visitNum = job.timeLog.filter(e => e.tech === tech).length + 1;
+  job.timeLog.push({
+    id: uid('te'),
+    tech,
+    date,
+    clockIn: time,
+    clockOut: null,
+    visitNum,
+    notes: document.getElementById('ci-notes').value.trim()
+  });
+  job.history.push({ action: 'clock_in', tech, at: Date.now() });
+  saveOne('jobs', job);
+  closeModal('modal-clockin');
+  if (currentView === 'job-detail') renderJobDetail();
+}
+
+function openClockOut(jobId, entryId, tech) {
+  document.getElementById('co-job-id').value = jobId;
+  document.getElementById('co-entry-id').value = entryId;
+  document.getElementById('co-tech-display').textContent = tech;
+  document.getElementById('co-time').value = nowTime();
+  document.getElementById('co-notes').value = '';
+  openModal('modal-clockout');
+}
+
+function saveClockOut() {
+  const jobId = document.getElementById('co-job-id').value;
+  const entryId = document.getElementById('co-entry-id').value;
+  const time = document.getElementById('co-time').value;
+  if (!time) { alert('Clock-out time required'); return; }
+  const job = state.jobs.find(j => j.id === jobId);
+  if (!job) return;
+  const entry = job.timeLog.find(e => e.id === entryId);
+  if (!entry) return;
+  entry.clockOut = time;
+  entry.outNotes = document.getElementById('co-notes').value.trim();
+  job.history.push({ action: 'clock_out', tech: entry.tech, at: Date.now() });
+  saveOne('jobs', job);
+  closeModal('modal-clockout');
+  if (currentView === 'job-detail') renderJobDetail();
+}
+
+function deleteTimeEntry(jobId, entryId) {
+  if (!confirm('Remove this time entry?')) return;
+  const job = state.jobs.find(j => j.id === jobId);
+  if (!job) return;
+  job.timeLog = job.timeLog.filter(e => e.id !== entryId);
+  saveOne('jobs', job);
+  if (currentView === 'job-detail') renderJobDetail();
+}
+
+function openManualTime(jobId) {
+  document.getElementById('time-job-id').value = jobId;
+  document.getElementById('time-date').value = today();
+  document.getElementById('time-in').value = '';
+  document.getElementById('time-out').value = '';
+  document.getElementById('time-notes').value = '';
+  const job = state.jobs.find(j => j.id === jobId);
+  const visitNum = job ? job.timeLog.length + 1 : 1;
+  document.getElementById('time-visit').value = visitNum;
+  openModal('modal-time');
+}
+
+function saveTimeEntry() {
+  const jobId = document.getElementById('time-job-id').value;
+  const tech = document.getElementById('time-tech').value;
+  const date = document.getElementById('time-date').value;
+  const inT = document.getElementById('time-in').value;
+  const outT = document.getElementById('time-out').value;
+  if (!tech || !date || !inT) { alert('Tech, date and clock-in required'); return; }
+  const job = state.jobs.find(j => j.id === jobId);
+  if (!job) return;
+  const visitNum = parseInt(document.getElementById('time-visit').value) || (job.timeLog.length + 1);
+  job.timeLog.push({
+    id: uid('te'),
+    tech, date,
+    clockIn: inT,
+    clockOut: outT || null,
+    visitNum,
+    notes: document.getElementById('time-notes').value.trim()
+  });
+  saveOne('jobs', job);
+  closeModal('modal-time');
+  if (currentView === 'job-detail') renderJobDetail();
+}
+
+// ──────────────────────────────────────────────────────────
+// LINE ITEMS
+// ──────────────────────────────────────────────────────────
+function openAddLineItem(jobId) {
+  document.getElementById('line-job-id').value = jobId;
+  document.getElementById('line-type').value = 'labor';
+  document.getElementById('line-desc').value = '';
+  document.getElementById('line-qty').value = '';
+  document.getElementById('line-rate').value = '';
+  document.getElementById('line-cost').value = '';
+  document.getElementById('line-margin').value = '';
+  document.getElementById('line-total-preview').textContent = '$0.00';
+  updateLineType();
+  openModal('modal-line');
+}
+
+function updateLineType() {
+  const t = document.getElementById('line-type').value;
+  document.getElementById('line-material-fields').style.display = t === 'material' ? 'block' : 'none';
+  document.getElementById('line-qty-label').textContent = t === 'labor' ? 'Hours' : 'Qty';
+  document.getElementById('line-rate-label').textContent = t === 'labor' ? 'Rate/hr' : 'Sell Price';
+  if (t === 'labor') {
+    // auto fill rate
+    const rate = document.getElementById('line-rate').value;
+    if (!rate) document.getElementById('line-rate').value = '202';
+  }
+  calcLineTotal();
+}
+
+function calcLineTotal() {
+  const qty = parseFloat(document.getElementById('line-qty').value) || 0;
+  const rate = parseFloat(document.getElementById('line-rate').value) || 0;
+  const total = qty * rate;
+  document.getElementById('line-total-preview').textContent = fmtMoney(total);
+  return total;
+}
+
+function autoMarkup() {
+  const cost = parseFloat(document.getElementById('line-cost').value) || 0;
+  const jobId = document.getElementById('line-job-id').value;
+  const job = state.jobs.find(j => j.id === jobId);
+  const cust = job ? state.customers.find(c => c.id === job.customerId) : null;
+  const isPlan = cust?.maintenancePlan;
+  let margin = 40;
+  if (cost <= 25) margin = 50;
+  else if (cost <= 150) margin = 45;
+  else if (cost <= 1999) margin = 40;
+  else margin = isPlan ? 35 : 40;
+  document.getElementById('line-margin').value = margin;
+  calcSellFromMargin();
+}
+
+function calcSellFromMargin() {
+  const cost = parseFloat(document.getElementById('line-cost').value) || 0;
+  const margin = parseFloat(document.getElementById('line-margin').value) || 40;
+  if (cost > 0 && margin > 0 && margin < 100) {
+    const sell = cost / (1 - margin/100);
+    document.getElementById('line-rate').value = sell.toFixed(2);
+    const qty = parseFloat(document.getElementById('line-qty').value) || 1;
+    document.getElementById('line-total-preview').textContent = fmtMoney(sell * qty);
+  }
+}
+
+['line-qty','line-rate'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', calcLineTotal);
+});
+
+function saveLineItem() {
+  const jobId = document.getElementById('line-job-id').value;
+  const type = document.getElementById('line-type').value;
+  const desc = document.getElementById('line-desc').value.trim();
+  if (!desc) { alert('Description required'); return; }
+  const qty = parseFloat(document.getElementById('line-qty').value) || 0;
+  const rate = parseFloat(document.getElementById('line-rate').value) || 0;
+  const cost = parseFloat(document.getElementById('line-cost').value) || 0;
+  const margin = parseFloat(document.getElementById('line-margin').value) || 0;
+  const total = qty * rate;
+  const job = state.jobs.find(j => j.id === jobId);
+  if (!job) return;
+  job.lineItems.push({
+    id: uid('li'),
+    type, description: desc, qty, rate, cost, margin, total,
+    addedAt: Date.now()
+  });
+  job.history.push({ action: 'line_item_added', desc, at: Date.now() });
+  saveOne('jobs', job);
+  closeModal('modal-line');
+  if (currentView === 'job-detail') renderJobDetail();
+}
+
+function deleteLineItem(jobId, liId) {
+  const job = state.jobs.find(j => j.id === jobId);
+  if (!job) return;
+  job.lineItems = job.lineItems.filter(i => i.id !== liId);
+  saveOne('jobs', job);
+  if (currentView === 'job-detail') renderJobDetail();
+}
+
+// ──────────────────────────────────────────────────────────
+// CALCULATOR
+// ──────────────────────────────────────────────────────────
+function calcUpdate() {
+  const isPlan = document.getElementById('calc-plan-toggle').classList.contains('on');
+  const hours = parseFloat(document.getElementById('calc-hours').value) || 0;
+  const laborRate = parseFloat(document.getElementById('calc-labor-type').value) || 202;
+  const matCost = parseFloat(document.getElementById('calc-mat-cost').value) || 0;
+  const fees = parseFloat(document.getElementById('calc-fees').value) || 0;
+  const multiHour = document.getElementById('calc-multi-hour').checked;
+  const tierOverride = document.getElementById('calc-mat-tier').value;
+
+  let laborTotal = 0;
+  let laborNote = '';
+  if (multiHour && hours > 1) {
+    const firstHour = 202;
+    const contRate = 182;
+    laborTotal = firstHour + (hours - 1) * contRate;
+    laborNote = `1h @ $202 + ${(hours-1).toFixed(2)}h @ $182/hr`;
+  } else {
+    laborTotal = hours * laborRate;
+    laborNote = hours > 0 ? `${hours}h @ $${laborRate}/hr` : '';
+  }
+
+  // markup
+  let margin = 40;
+  if (tierOverride) {
+    margin = parseFloat(tierOverride);
+    if (!isPlan && margin === 35) margin = 40;
+  } else {
+    if (matCost <= 25) margin = 50;
+    else if (matCost <= 150) margin = 45;
+    else if (matCost <= 1999) margin = 40;
+    else margin = isPlan ? 35 : 40;
+  }
+  let matSell = matCost > 0 ? matCost / (1 - margin/100) : 0;
+
+  const grandTotal = laborTotal + matSell + fees;
+
+  document.getElementById('calc-total').textContent = fmtMoney(grandTotal);
+  document.getElementById('calc-sub').textContent = isPlan ? 'Maintenance Plan Pricing' : 'Standard Pricing';
+
+  const breakdown = document.getElementById('calc-breakdown');
+  const rows = [];
+  if (laborTotal > 0) rows.push({ l: 'Labor' + (laborNote ? ` (${laborNote})` : ''), v: fmtMoney(laborTotal) });
+  if (matSell > 0) rows.push({ l: `Materials (cost ${fmtMoney(matCost)} @ ${margin}% margin)`, v: fmtMoney(matSell) });
+  if (fees > 0) rows.push({ l: 'Additional Fees', v: fmtMoney(fees) });
+  breakdown.innerHTML = rows.length ? rows.map((r,i) =>
+    `<div class="calc-row${i===rows.length-1&&rows.length>0?' ':''}"><span>${r.l}</span><span style="font-weight:600">${r.v}</span></div>`
+  ).join('') : '';
+}
+
+// ──────────────────────────────────────────────────────────
+// INIT
+// ──────────────────────────────────────────────────────────
+(async () => {
+  await load();
+  renderDashboard();
+})();
+</script>
+</body>
+</html>
