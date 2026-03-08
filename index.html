@@ -117,12 +117,8 @@ ul { list-style: none; }
   font-size: 13px; color: var(--red-l); margin-top: 12px;
   text-align: center; min-height: 18px;
 }
-#logout-btn {
-  font-size: 12px; font-weight: 600; color: var(--text2);
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 6px; padding: 5px 10px; display: none;
-}
-#logout-btn.visible { display: block; }
+#logout-btn { display: none; } /* legacy — logout moved to settings view */
+#gear-btn.visible { display: flex !important; }
 
 /* ─── VIEWS ──────────────────────────────────────────── */
 .view { display: none; padding: 14px 14px 0; }
@@ -599,7 +595,9 @@ ul { list-style: none; }
     <span id="logo-text" style="display:none;font-weight:700;font-size:15px;color:var(--red)">TOM FALK P&H</span>
     <span class="page-title" id="page-title">Dashboard</span>
     <div class="header-actions" id="header-actions"></div>
-    <button id="logout-btn" onclick="doLogout()">Sign Out</button>
+    <button id="gear-btn" onclick="showView('settings')" title="Settings" style="background:none;border:none;padding:6px;cursor:pointer;color:var(--text2);display:none;align-items:center;justify-content:center">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06-.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+    </button>
   </div>
 
   <!-- VIEWS -->
@@ -777,7 +775,40 @@ ul { list-style: none; }
           <input class="search-box" id="mat-search" placeholder="Search materials…" oninput="renderSettings()">
         </div>
         <div id="mat-list"></div>
+
+        <!-- Account -->
+        <div class="card" style="margin-top:20px;margin-bottom:20px">
+          <div class="card-title" style="margin-bottom:12px">Account</div>
+          <div style="font-size:13px;color:var(--text2);margin-bottom:14px" id="settings-user-info"></div>
+          <button class="btn btn-ghost" style="width:100%;color:var(--red-l);border-color:rgba(190,38,37,.3)" onclick="doLogout()">Sign Out</button>
+        </div>
       </div>
+    </div>
+
+
+    <!-- ══ FINANCE ══ -->
+    <div class="view" id="view-finance">
+      <!-- Sub-tabs -->
+      <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:14px">
+        <button id="fin-tab-estimates" onclick="switchFinTab('estimates')" style="flex:1;padding:10px 0;font-size:13px;font-weight:600;background:none;border:none;color:var(--red);border-bottom:2px solid var(--red);margin-bottom:-2px;cursor:pointer;font-family:var(--font)">Estimates</button>
+        <button id="fin-tab-invoices" onclick="switchFinTab('invoices')" style="flex:1;padding:10px 0;font-size:13px;font-weight:600;background:none;border:none;color:var(--text3);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:var(--font)">Invoices</button>
+      </div>
+
+      <!-- Search row -->
+      <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">
+        <input class="search-box" id="fin-search" placeholder="Search by name, job #, address, status…" oninput="renderFinance()" style="flex:1">
+      </div>
+
+      <!-- Status filter chips -->
+      <div id="fin-status-chips" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px"></div>
+
+      <!-- Count -->
+      <div class="section-header" style="margin-bottom:10px">
+        <span class="section-title" id="fin-count">Estimates</span>
+      </div>
+
+      <!-- List -->
+      <div id="fin-list"></div>
     </div>
 
     <!-- ══ PRICEBOOK VIEW ══ -->
@@ -809,9 +840,9 @@ ul { list-style: none; }
       <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><line x1="9" y1="7" x2="15" y2="7"/><line x1="9" y1="11" x2="15" y2="11"/></svg>
       Pricebook
     </button>
-    <button class="nav-btn" onclick="showView('settings',this)" id="nav-settings">
-      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
-      Settings
+    <button class="nav-btn" onclick="showView('finance',this)" id="nav-finance">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+      Finance
     </button>
   </div>
 
@@ -1598,6 +1629,46 @@ ul { list-style: none; }
   </div>
 </div>
 
+<div class="modal-overlay" id="modal-asset">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="modal-asset-title">Add Equipment</div>
+    <input type="hidden" id="asset-cust-id">
+    <input type="hidden" id="asset-id">
+    <div style="margin-bottom:12px">
+      <label style="font-size:12px;color:var(--text3);font-weight:600;display:block;margin-bottom:4px">Make</label>
+      <input id="asset-make" class="form-input" placeholder="e.g. Lennox, Navien, Rheem">
+    </div>
+    <div style="margin-bottom:12px">
+      <label style="font-size:12px;color:var(--text3);font-weight:600;display:block;margin-bottom:4px">Model</label>
+      <input id="asset-model" class="form-input" placeholder="e.g. XC21-036">
+    </div>
+    <div style="margin-bottom:12px">
+      <label style="font-size:12px;color:var(--text3);font-weight:600;display:block;margin-bottom:4px">Serial Number</label>
+      <input id="asset-serial" class="form-input" placeholder="Serial #">
+    </div>
+    <div style="margin-bottom:12px">
+      <label style="font-size:12px;color:var(--text3);font-weight:600;display:block;margin-bottom:4px">Notes</label>
+      <textarea id="asset-notes" class="form-input" rows="2" placeholder="Installation date, condition, etc." style="resize:vertical"></textarea>
+    </div>
+    <div style="margin-bottom:16px">
+      <label style="font-size:12px;color:var(--text3);font-weight:600;display:block;margin-bottom:6px">Photo</label>
+      <div style="display:flex;align-items:center;gap:10px">
+        <input type="file" id="asset-photo-input" accept="image/*" capture="environment" style="display:none" onchange="handleAssetPhoto(this)">
+        <button onclick="document.getElementById('asset-photo-input').click()" class="btn btn-ghost btn-sm">
+          <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          Take / Upload Photo
+        </button>
+        <span id="asset-photo-name" style="font-size:12px;color:var(--text3)"></span>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-asset')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveAsset()">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══════════════════════════════════════════════════════════
      JAVASCRIPT
 ════════════════════════════════════════════════════════════ -->
@@ -1698,12 +1769,12 @@ const USERNAME_MAP = {};
 
 function authShowLogin() {
   document.getElementById('login-screen').classList.add('visible');
-  document.getElementById('logout-btn').classList.remove('visible');
+  document.getElementById('gear-btn').classList.remove('visible');
 }
 
 function authShowApp() {
   document.getElementById('login-screen').classList.remove('visible');
-  document.getElementById('logout-btn').classList.add('visible');
+  if (!isTech()) document.getElementById('gear-btn').classList.add('visible');
   applyRoleGates();
 }
 
@@ -1711,7 +1782,7 @@ function applyRoleGates() {
   if (!currentUser) return;
   const role = currentUser.role;
   // Nav items hidden for techs
-  const techHidden = ['nav-settings'];
+  const techHidden = []; // settings accessed via gear icon (admin only via gear visibility)
   if (role === 'tech') {
     techHidden.forEach(id => {
       const el = document.getElementById(id);
@@ -1988,7 +2059,7 @@ function showView(name, btnEl) {
     dashboard:'Dashboard', leads:'Leads', customers:'Customers',
     jobs:'Jobs', 'job-detail':'Job Detail', 'customer-detail':'Customer Detail',
     'lead-detail':'Lead Detail', invoice:'Invoice', unpaid:'Unpaid Invoices',
-    settings:'Settings — Materials', pricebook:'Pricebook'
+    settings:'Settings', pricebook:'Pricebook', finance:'Finance'
   };
   document.getElementById('page-title').textContent = titles[name] || '';
   // render
@@ -1999,8 +2070,11 @@ function showView(name, btnEl) {
   if (name === 'settings') {
     if (isTech()) { showView('jobs'); return; }
     renderSettings(); populateRateInputs(); populateTechsSettings();
+    const ui = document.getElementById('settings-user-info');
+    if (ui && currentUser) ui.textContent = 'Signed in as ' + currentUser.username + ' (' + currentUser.role + ')';
   }
   if (name === 'pricebook') renderPricebookView();
+  if (name === 'finance') { renderFinance(); }
 
   const actions = document.getElementById('header-actions');
   actions.innerHTML = '';
@@ -2013,6 +2087,141 @@ function showView(name, btnEl) {
 }
 
 function backToJobs() { showView('jobs'); }
+
+// ──────────────────────────────────────────────────────────
+// FINANCE VIEW
+// ──────────────────────────────────────────────────────────
+let currentFinTab = 'estimates'; // 'estimates' | 'invoices'
+let activeFinStatus = null;
+
+const ESTIMATE_STATUSES = [
+  { key: 'draft',    label: 'Draft',    color: '#888' },
+  { key: 'sent',     label: 'Sent',     color: '#3b82f6' },
+  { key: 'accepted', label: 'Accepted', color: '#22c55e' },
+  { key: 'declined', label: 'Declined', color: '#ef4444' },
+];
+
+const INVOICE_STATUSES = [
+  { key: 'draft',   label: 'Draft',    color: '#888' },
+  { key: 'sent',    label: 'Sent',     color: '#3b82f6' },
+  { key: 'partial', label: 'Partial',  color: '#f59e0b' },
+  { key: 'paid',    label: 'Paid',     color: '#22c55e' },
+];
+
+function finStatusBadge(key, tab) {
+  const list = tab === 'estimates' ? ESTIMATE_STATUSES : INVOICE_STATUSES;
+  const s = list.find(x => x.key === key) || { label: key, color: '#888' };
+  return `<span style="display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;background:${s.color}22;color:${s.color};text-transform:uppercase;letter-spacing:.4px">${s.label}</span>`;
+}
+
+function switchFinTab(tab) {
+  currentFinTab = tab;
+  activeFinStatus = null;
+  document.getElementById('fin-tab-estimates').style.color = tab === 'estimates' ? 'var(--red)' : 'var(--text3)';
+  document.getElementById('fin-tab-estimates').style.borderBottomColor = tab === 'estimates' ? 'var(--red)' : 'transparent';
+  document.getElementById('fin-tab-invoices').style.color = tab === 'invoices' ? 'var(--red)' : 'var(--text3)';
+  document.getElementById('fin-tab-invoices').style.borderBottomColor = tab === 'invoices' ? 'var(--red)' : 'transparent';
+  document.getElementById('fin-search').value = '';
+  renderFinance();
+}
+
+function renderFinance() {
+  const tab = currentFinTab;
+  const q = (document.getElementById('fin-search')?.value || '').toLowerCase();
+  const statuses = tab === 'estimates' ? ESTIMATE_STATUSES : INVOICE_STATUSES;
+
+  // Build status chips
+  const chipsEl = document.getElementById('fin-status-chips');
+  if (chipsEl) {
+    chipsEl.innerHTML = statuses.map(s => {
+      const active = activeFinStatus === s.key;
+      return `<button onclick="toggleFinStatus('${s.key}')" style="padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;border:1px solid ${s.color};background:${active ? s.color : s.color+'22'};color:${active ? '#fff' : s.color};cursor:pointer;font-family:var(--font)">${s.label}</button>`;
+    }).join('');
+  }
+
+  // Get jobs for this tab
+  const allJobs = [...(state.jobs || []), ...(state.archivedJobs || [])];
+  let items;
+  if (tab === 'estimates') {
+    items = allJobs.filter(j => j.status === 'estimate' || j.estimateStatus);
+  } else {
+    // All jobs that have progressed past estimate — have line items or are active/completed
+    const invoiceStatuses = ['in-progress','completed','paid','closed'];
+    items = allJobs.filter(j =>
+      (j.invoiceStatus && j.invoiceStatus !== 'none') ||
+      invoiceStatuses.includes(j.status) ||
+      (j.lineItems && j.lineItems.length > 0)
+    );
+  }
+
+  // Status filter
+  if (activeFinStatus) {
+    if (tab === 'estimates') {
+      items = items.filter(j => (j.estimateStatus || 'draft') === activeFinStatus);
+    } else {
+      items = items.filter(j => (j.invoiceStatus || 'draft') === activeFinStatus);
+    }
+  }
+
+  // Search filter
+  if (q) {
+    items = items.filter(j => {
+      const statusKey = tab === 'estimates' ? (j.estimateStatus || 'draft') : (j.invoiceStatus || 'draft');
+      return (j.customerName || '').toLowerCase().includes(q) ||
+        String(j.jobNumber || '').includes(q) ||
+        (j.address || '').toLowerCase().includes(q) ||
+        statusKey.includes(q);
+    });
+  }
+
+  // Sort newest first
+  items.sort((a,b) => (b.createdAt||0) - (a.createdAt||0));
+
+  const label = tab === 'estimates' ? 'Estimate' : 'Invoice';
+  document.getElementById('fin-count').textContent = items.length + ' ' + label + (items.length !== 1 ? 's' : '');
+
+  if (!items.length) {
+    document.getElementById('fin-list').innerHTML = `<div class="empty-state"><p>No ${label.toLowerCase()}s found.</p></div>`;
+    return;
+  }
+
+  document.getElementById('fin-list').innerHTML = items.map(j => {
+    const statusKey = tab === 'estimates' ? (j.estimateStatus || 'draft') : (j.invoiceStatus || 'draft');
+    const total = tab === 'invoices' ? fmtMoney(calcJobTotal(j)) : (j.estimateTotal ? fmtMoney(j.estimateTotal) : '—');
+    const estButtons = tab === 'estimates' ? `
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:8px" onclick="event.stopPropagation()">
+        ${ESTIMATE_STATUSES.map(s => {
+          const active = statusKey === s.key;
+          return `<button onclick="setEstimateStatus('${j.id}','${s.key}')" style="padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font);border:1.5px solid ${s.color};background:${active ? s.color : 'transparent'};color:${active ? '#fff' : s.color}">${s.label}</button>`;
+        }).join('')}
+      </div>` : '';
+    return `<div class="card" style="margin-bottom:8px;cursor:pointer" onclick="openJobDetail('${j.id}')">
+      <div class="card-header">
+        <div>
+          <div class="card-title">${j.customerName || 'Unknown'}</div>
+          <div class="card-sub">${j.address || ''} ${j.jobNumber ? '· #'+j.jobNumber : ''}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          ${finStatusBadge(statusKey, tab)}
+          <div style="font-size:13px;font-weight:700;margin-top:4px;color:var(--text)">${total}</div>
+        </div>
+      </div>
+      ${j.scheduledDate ? `<div style="font-size:12px;color:var(--text3);margin-top:6px">${fmtDate(j.scheduledDate)}</div>` : ''}
+      ${estButtons}
+    </div>`;
+  }).join('');
+}
+
+function toggleFinStatus(key) {
+  activeFinStatus = activeFinStatus === key ? null : key;
+  renderFinance();
+}
+
+function calcJobTotal(job) {
+  if (!job || !job.lineItems) return 0;
+  return job.lineItems.reduce((sum, li) => sum + ((li.rate || 0) * (li.qty || 1)), 0);
+}
+
 function showJobsTab(tab) {
   showView('jobs');
   currentJobTab = tab;
@@ -2702,6 +2911,110 @@ scanAllDuplicates = function() {
 
 
 
+// ──────────────────────────────────────────────────────────
+// CUSTOMER ASSETS
+// ──────────────────────────────────────────────────────────
+const ASSET_BUCKET = 'customer-assets';
+
+async function getAssetPhotoUrl(path) {
+  if (!path || !sb) return '';
+  try {
+    const { data } = await sb.storage.from(ASSET_BUCKET).createSignedUrl(path, 3600);
+    return data?.signedUrl || '';
+  } catch(e) { return ''; }
+}
+
+async function renderAssetPhotos(custId) {
+  const c = state.customers.find(c => c.id === custId);
+  if (!c || !c.assets) return;
+  for (const a of c.assets) {
+    if (a.photo) {
+      const url = await getAssetPhotoUrl(a.photo);
+      const img = document.getElementById('asset-img-' + a.id);
+      if (img && url) img.src = url;
+    }
+  }
+}
+
+function openAssetModal(custId, assetId) {
+  document.getElementById('asset-cust-id').value = custId;
+  document.getElementById('asset-id').value = assetId || '';
+  document.getElementById('asset-make').value = '';
+  document.getElementById('asset-model').value = '';
+  document.getElementById('asset-serial').value = '';
+  document.getElementById('asset-notes').value = '';
+  document.getElementById('asset-photo-input').value = '';
+  document.getElementById('asset-photo-name').textContent = '';
+  document.getElementById('asset-photo-name').dataset.file = '';
+  document.getElementById('modal-asset-title').textContent = assetId ? 'Edit Equipment' : 'Add Equipment';
+  if (assetId) {
+    const c = state.customers.find(c => c.id === custId);
+    const a = (c?.assets || []).find(a => a.id === assetId);
+    if (a) {
+      document.getElementById('asset-make').value = a.make || '';
+      document.getElementById('asset-model').value = a.model || '';
+      document.getElementById('asset-serial').value = a.serial || '';
+      document.getElementById('asset-notes').value = a.notes || '';
+      if (a.photo) document.getElementById('asset-photo-name').textContent = '📎 Photo on file';
+    }
+  }
+  openModal('modal-asset');
+}
+
+function handleAssetPhoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const label = document.getElementById('asset-photo-name');
+  label.textContent = '📎 ' + file.name;
+  label._pendingFile = file;
+}
+
+async function saveAsset() {
+  const custId = document.getElementById('asset-cust-id').value;
+  const assetId = document.getElementById('asset-id').value;
+  const c = state.customers.find(c => c.id === custId);
+  if (!c) return;
+  if (!c.assets) c.assets = [];
+
+  const make   = document.getElementById('asset-make').value.trim();
+  const model  = document.getElementById('asset-model').value.trim();
+  const serial = document.getElementById('asset-serial').value.trim();
+  const notes  = document.getElementById('asset-notes').value.trim();
+  const label  = document.getElementById('asset-photo-name');
+  const file   = label._pendingFile || null;
+
+  let photoPath = assetId ? (c.assets.find(a => a.id === assetId)?.photo || '') : '';
+
+  if (file && sb) {
+    try {
+      const ext = file.name.split('.').pop();
+      const path = `${custId}/${assetId || ('ast-' + Date.now())}_${Date.now()}.${ext}`;
+      const { error } = await sb.storage.from(ASSET_BUCKET).upload(path, file, { upsert: true });
+      if (!error) photoPath = path;
+      else console.warn('Asset photo upload failed:', error.message);
+    } catch(e) { console.warn('Asset upload error:', e); }
+  }
+
+  if (assetId) {
+    const a = c.assets.find(a => a.id === assetId);
+    if (a) { a.make = make; a.model = model; a.serial = serial; a.notes = notes; a.photo = photoPath; }
+  } else {
+    c.assets.push({ id: 'ast-' + Date.now(), make, model, serial, notes, photo: photoPath, createdAt: Date.now() });
+  }
+
+  saveOne('customers', c);
+  closeModal('modal-asset');
+  openCustomerDetail(custId);
+}
+
+function deleteAsset(custId, assetId) {
+  const c = state.customers.find(c => c.id === custId);
+  if (!c) return;
+  c.assets = (c.assets || []).filter(a => a.id !== assetId);
+  saveOne('customers', c);
+  openCustomerDetail(custId);
+}
+
 function editCustomer(id) {
   const c = state.customers.find(c => c.id === id);
   if (!c) return;
@@ -2842,12 +3155,37 @@ function openCustomerDetail(id) {
       }
       <button class="btn btn-ghost" onclick="editCustomer('${c.id}')">Edit</button>
     </div>
+    <!-- ASSETS -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="detail-section-title" style="margin-bottom:10px">
+        <span>Equipment (${(c.assets||[]).length})</span>
+        <button class="btn btn-sm btn-secondary" onclick="openAssetModal('${c.id}')">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add
+        </button>
+      </div>
+      ${(c.assets||[]).length ? (c.assets).map(a => `
+        <div style="padding:10px 0;border-top:1px solid var(--border);display:flex;align-items:flex-start;gap:12px">
+          ${a.photo ? `<img id="asset-img-${a.id}" src="" style="width:56px;height:56px;object-fit:cover;border-radius:8px;flex-shrink:0;border:1px solid var(--border)">` : `<div style="width:56px;height:56px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="22" height="22" viewBox="0 0 24 24" stroke="var(--text3)" fill="none" stroke-width="1.5"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg></div>`}
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:600;font-size:14px">${a.make||''} ${a.model||''}</div>
+            ${a.serial ? `<div style="font-size:12px;color:var(--text3);margin-top:2px">S/N: ${a.serial}</div>` : ''}
+            ${a.notes ? `<div style="font-size:12px;color:var(--text2);margin-top:4px">${a.notes}</div>` : ''}
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button onclick="openAssetModal('${c.id}','${a.id}')" style="background:none;color:var(--text3);font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;cursor:pointer">Edit</button>
+            <button onclick="deleteAsset('${c.id}','${a.id}')" style="background:none;color:var(--red-l);font-size:18px;padding:0 4px;border:none;cursor:pointer">×</button>
+          </div>
+        </div>
+      `).join('') : '<div style="color:var(--text3);font-size:13px;padding:4px 0">No equipment recorded.</div>'}
+    </div>
     <div class="detail-section-title">Job History (${jobs.length})</div>
     ${jobs.length ? jobs.map(j => jobCard(j, true)).join('') : '<div style="color:var(--text3);font-size:14px;padding:12px 0">No jobs yet</div>'}
     ${!isTech() ? `<button class="btn btn-danger" style="margin-top:12px" onclick="openDeleteCustomerModal('${c.id}')">Delete Customer</button>` : ''}
   `;
   document.getElementById('page-title').textContent = c.name;
   showView('customer-detail');
+  renderAssetPhotos(c.id);
 }
 
 
@@ -2892,7 +3230,7 @@ function renderJobs(keepPage) {
     jobs = jobs.filter(j => (j.techs || []).includes(currentUser.username));
   }
   if (currentJobTab === 'active') jobs = jobs.filter(j => ['unscheduled','scheduled','active','completed'].includes(j.status));
-  else if (currentJobTab === 'estimate') jobs = jobs.filter(j => j.status === 'estimate');
+  else if (currentJobTab === 'estimate') jobs = jobs.filter(j => j.status === 'estimate' && j.estimateStatus !== 'declined');
   else if (currentJobTab === 'closed') jobs = jobs.filter(j => ['invoiced','paid','closed'].includes(j.status));
 
   // Quick filters — applied on top of tab
@@ -3015,6 +3353,9 @@ function saveJob() {
       timeLog: [],
       lineItems: [],
       history: [{ action: 'created', at: Date.now() }],
+      invoiceStatus: 'draft',
+      estimateStatus: 'draft',
+      paymentLink: null,
       createdAt: Date.now()
     };
     job.status = isEstimate ? 'estimate' : (job.scheduledDate ? 'scheduled' : 'unscheduled');
@@ -3273,6 +3614,19 @@ function renderJobDetail() {
         ${statusBadge(job.status)}
         <span style="font-size:12px;color:var(--text3)">${autoStatusNote(job)}</span>
       </div>
+      ${job.status === 'estimate' ? `
+        <div style="margin-top:12px">
+          <div style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Estimate Status</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            ${['draft','sent','accepted','declined'].map(s => {
+              const active = (job.estimateStatus || 'draft') === s;
+              const colors = { draft: 'var(--text2)', sent: 'var(--blue)', accepted: 'var(--green)', declined: 'var(--red-l)' };
+              const labels = { draft: 'Draft', sent: 'Sent', accepted: 'Accepted', declined: 'Declined' };
+              return `<button onclick="setEstimateStatus('${id}','${s}')" style="padding:6px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);border:1.5px solid ${colors[s]};background:${active ? colors[s] : 'transparent'};color:${active ? (s==='draft'?'var(--bg)':'var(--bg)') : colors[s]};opacity:${active?1:.75}">${labels[s]}</button>`;
+            }).join('')}
+          </div>
+        </div>
+      ` : ''}
       ${job.status === 'active' || job.status === 'completed' ? `
         <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
           ${job.status === 'active' ? `<button class="btn btn-secondary btn-sm" onclick="manualComplete('${id}')">Mark Completed</button>` : ''}
@@ -4606,6 +4960,24 @@ function setInvoiceStatus(jobId, status) {
   }
   saveOne('jobs', job);
   renderInvoice();
+}
+
+function setEstimateStatus(jobId, status) {
+  const job = state.jobs.find(j => j.id === jobId) || state.archivedJobs.find(j => j.id === jobId);
+  if (!job) return;
+  job.estimateStatus = status;
+  if (status === 'sent') job.estimateSentAt = Date.now();
+  if (status === 'accepted') {
+    job.estimateAcceptedAt = Date.now();
+    job.history.push({ action: 'status_change', to: 'estimate_accepted', at: Date.now() });
+  }
+  if (status === 'declined') {
+    job.estimateDeclinedAt = Date.now();
+    job.history.push({ action: 'status_change', to: 'estimate_declined', at: Date.now() });
+  }
+  saveOne('jobs', job);
+  if (currentView === 'finance') renderFinance();
+  if (currentView === 'job-detail') renderJobDetail();
 }
 
 function openSendInvoice(jobId) {
