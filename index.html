@@ -249,7 +249,7 @@ textarea.form-input, .form-textarea { resize: vertical; min-height: 44px; overfl
 .toggle.on::after { left: 23px; }
 
 /* ─── STAT STRIP ─────────────────────────────────────── */
-.stat-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+.stat-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); gap: 8px; margin-bottom: 14px; }
 .stat-card {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 12px 10px; text-align: center;
@@ -576,10 +576,18 @@ textarea.form-input, .form-textarea { resize: vertical; min-height: 44px; overfl
 }
 .clock-indicator::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 1.5s ease infinite; }
 @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
+/* ── Toast ── */
+#toast-container { position:fixed; bottom:80px; left:50%; transform:translateX(-50%); z-index:9999; display:flex; flex-direction:column; align-items:center; gap:8px; pointer-events:none; }
+.toast { padding:10px 18px; border-radius:10px; font-size:14px; font-weight:600; font-family:var(--font); box-shadow:0 4px 20px rgba(0,0,0,.4); animation:toastIn .2s ease; max-width:320px; text-align:center; }
+.toast.success { background:#22c55e; color:#fff; }
+.toast.error   { background:#ef4444; color:#fff; }
+.toast.info    { background:var(--surface2); color:var(--text); border:1px solid var(--border); }
+@keyframes toastIn { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
 </style>
 </head>
 <body>
 <div id="app">
+<div id="toast-container"></div>
 
   <!-- ─── LOGIN SCREEN ─── -->
   <div id="login-screen">
@@ -761,6 +769,17 @@ textarea.form-input, .form-textarea { resize: vertical; min-height: 44px; overfl
           </div>
         </div>
 
+        <!-- Estimate Templates -->
+        <div class="card" style="margin-bottom:20px">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div>
+              <div class="card-title">Estimate Templates</div>
+              <div style="font-size:12px;color:var(--text3);margin-top:2px">Full templates &amp; add-on package library</div>
+            </div>
+            <button class="btn btn-secondary" onclick="openEstimateTemplateManager()">Manage</button>
+          </div>
+        </div>
+
         <!-- Technicians -->
         <div class="card" style="margin-bottom:20px">
           <div class="card-title" style="margin-bottom:12px">Technicians</div>
@@ -880,6 +899,17 @@ textarea.form-input, .form-textarea { resize: vertical; min-height: 44px; overfl
       </div>
     </div>
 
+    <!-- ══ ESTIMATE DETAIL VIEW ══ -->
+    <div class="view" id="view-estimate-detail">
+      <div style="padding:16px">
+        <button onclick="showView('finance')" style="display:flex;align-items:center;gap:6px;color:var(--text2);font-size:14px;background:none;padding:0;margin-bottom:16px">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+          Back to Estimates
+        </button>
+        <div id="estimate-detail-content"></div>
+      </div>
+    </div>
+
   </div><!-- /views -->
 
   <!-- ══ BOTTOM NAV ══ -->
@@ -909,6 +939,147 @@ textarea.form-input, .form-textarea { resize: vertical; min-height: 44px; overfl
       Finance
     </button>
   </div>
+
+<!-- ══ ESTIMATE CREATE/EDIT MODAL ══ -->
+<div class="modal-overlay" id="modal-estimate">
+  <div class="modal" style="max-height:92vh;overflow-y:auto">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="modal-estimate-title">New Estimate</div>
+
+    <input type="hidden" id="est-edit-id">
+
+    <!-- Template picker -->
+    <div class="form-group" id="est-template-row">
+      <label class="form-label">Load Template</label>
+      <select class="form-input" id="est-template-select" onchange="loadEstimateTemplate()">
+        <option value="">— Start blank —</option>
+      </select>
+    </div>
+
+    <!-- Customer -->
+    <div class="form-group">
+      <label class="form-label">Customer *</label>
+      <select class="form-input" id="est-customer-id" onchange="onEstCustomerChange()">
+        <option value="">Select customer…</option>
+      </select>
+    </div>
+
+    <!-- Address -->
+    <div class="form-group">
+      <label class="form-label">Site Address</label>
+      <input type="text" class="form-input" id="est-address" placeholder="Service address">
+    </div>
+
+    <!-- Scope / Notes -->
+    <div class="form-group">
+      <label class="form-label">Scope of Work / Notes</label>
+      <textarea class="form-input" id="est-notes" rows="3" placeholder="Describe the work to be done…"></textarea>
+    </div>
+
+    <!-- Expiration -->
+    <div class="form-group">
+      <label class="form-label">Expiration Date</label>
+      <input type="date" class="form-input" id="est-expires">
+    </div>
+
+    <!-- Base Line Items -->
+    <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px;margin-top:4px">Base Scope</div>
+    <div id="est-line-items-list"></div>
+    <button class="btn btn-ghost" style="width:100%;margin-bottom:16px" onclick="addEstLineItem()">+ Add Line Item</button>
+
+    <!-- Add-On Packages -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div style="font-size:13px;font-weight:700;color:var(--text)">Add-On Packages</div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-ghost btn-sm" onclick="addAddonFromLibrary()">From Library</button>
+        <button class="btn btn-ghost btn-sm" onclick="addNewAddon()">+ New</button>
+      </div>
+    </div>
+    <div id="est-addons-list"></div>
+
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn btn-ghost" style="flex:1" onclick="closeModal('modal-estimate')">Cancel</button>
+      <button class="btn btn-primary" style="flex:1" onclick="saveEstimate()">Save Estimate</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ESTIMATE APPROVE MODAL ══ -->
+<div class="modal-overlay" id="modal-est-approve">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Approve Estimate</div>
+    <input type="hidden" id="est-approve-id">
+    <div class="form-group">
+      <label class="form-label">Approved by</label>
+      <div style="display:flex;gap:8px">
+        <button id="approve-by-us-btn" class="btn btn-secondary" style="flex:1" onclick="setApproveBy('internal')">Us (Internal)</button>
+        <button id="approve-by-cust-btn" class="btn btn-ghost" style="flex:1" onclick="setApproveBy('customer')">Customer</button>
+      </div>
+    </div>
+    <div class="form-group" id="approve-cust-name-row" style="display:none">
+      <label class="form-label">Customer Name</label>
+      <input type="text" class="form-input" id="approve-cust-name" placeholder="Name of person who approved">
+    </div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Select which add-on packages are accepted:</div>
+    <div id="approve-addons-list"></div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn btn-ghost" style="flex:1" onclick="closeModal('modal-est-approve')">Cancel</button>
+      <button class="btn btn-success" style="flex:1" onclick="confirmApproveEstimate()">Approve &amp; Convert to Job</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ADDON PACKAGE EDITOR MODAL ══ -->
+<div class="modal-overlay" id="modal-addon">
+  <div class="modal" style="max-height:88vh;overflow-y:auto">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="modal-addon-title">Add-On Package</div>
+    <input type="hidden" id="addon-edit-index">
+    <div class="form-group">
+      <label class="form-label">Package Name *</label>
+      <input type="text" class="form-input" id="addon-name" placeholder="e.g. Carbon Pre-Filter, Whole-Home Humidifier">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description</label>
+      <input type="text" class="form-input" id="addon-desc" placeholder="Brief description of what's included">
+    </div>
+    <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px">Line Items</div>
+    <div id="addon-line-items-list"></div>
+    <button class="btn btn-ghost" style="width:100%;margin-bottom:16px" onclick="addAddonLineItem()">+ Add Line Item</button>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn btn-ghost" style="flex:1" onclick="closeModal('modal-addon')">Cancel</button>
+      <button class="btn btn-primary" style="flex:1" onclick="saveAddon()">Save Package</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ESTIMATE TEMPLATE MANAGER MODAL ══ -->
+<div class="modal-overlay" id="modal-est-templates">
+  <div class="modal" style="max-height:88vh;overflow-y:auto">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Estimate Templates</div>
+    <div id="est-templates-list"></div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn btn-ghost" style="flex:1" onclick="closeModal('modal-est-templates')">Close</button>
+      <button class="btn btn-primary" style="flex:1" onclick="openNewEstimateTemplate()">+ New Template</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ADDON LIBRARY PICKER MODAL ══ -->
+<div class="modal-overlay" id="modal-addon-library">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Add-On Package Library</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Select packages to add to this estimate:</div>
+    <div id="addon-library-list"></div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn btn-ghost" style="flex:1" onclick="closeModal('modal-addon-library')">Cancel</button>
+      <button class="btn btn-primary" style="flex:1" onclick="confirmAddonLibraryPick()">Add Selected</button>
+    </div>
+  </div>
+</div>
 
 <!-- RECURRING TEMPLATE MODAL -->
 <div class="modal-overlay" id="modal-recurring">
@@ -1961,6 +2132,9 @@ let state = {
   customers: [],
   jobs: [],
   archivedJobs: [],
+  estimates: [],
+  estimateTemplates: [],
+  addonPackages: [],
   pricebook: [],
   materials: [],
   recurring: [],
@@ -1986,7 +2160,7 @@ function authShowLogin() {
 
 function authShowApp() {
   document.getElementById('login-screen').classList.remove('visible');
-  if (!isTech()) document.getElementById('gear-btn').classList.add('visible');
+  document.getElementById('gear-btn').classList.add('visible'); // all roles need gear for logout
   applyRoleGates();
 }
 
@@ -2154,6 +2328,25 @@ async function save() {
   } catch(e) { console.error('save error', e); }
 }
 
+async function saveOneEstimate(est) {
+  try { await sb.from('estimates').upsert({ id: est.id, data: est }, { onConflict: 'id' }); }
+  catch(e) { console.error('saveOneEstimate error', e); }
+  localBackup();
+}
+async function deleteEstimate(id) {
+  state.estimates = state.estimates.filter(e => e.id !== id);
+  try { await sb.from('estimates').delete().eq('id', id); } catch(e) {}
+  localBackup();
+}
+async function saveEstimateTemplates() {
+  try { await sb.from('meta').upsert({ key: 'estimateTemplates', value: state.estimateTemplates }, { onConflict: 'key' }); }
+  catch(e) { console.error('saveEstimateTemplates error', e); }
+}
+async function saveAddonPackages() {
+  try { await sb.from('meta').upsert({ key: 'addonPackages', value: state.addonPackages }, { onConflict: 'key' }); }
+  catch(e) { console.error('saveAddonPackages error', e); }
+}
+
 function showLoadingOverlay(show) {
   let el = document.getElementById('loading-overlay');
   if (!el) {
@@ -2172,7 +2365,7 @@ function showLoadingOverlay(show) {
 async function load() {
   showLoadingOverlay(true);
   try {
-    const [leadsRes, custsRes, jobsRes, metaRes, pbRes, matRes, ratesRes, techsRes, dupesRes, recurRes] = await Promise.all([
+    const [leadsRes, custsRes, jobsRes, metaRes, pbRes, matRes, ratesRes, techsRes, dupesRes, recurRes, estRes, estTplRes, addonRes] = await Promise.all([
       sb.from('leads').select('id, data'),
       sb.from('customers').select('id, data'),
       sb.from('jobs').select('id, data'),
@@ -2183,6 +2376,9 @@ async function load() {
       sb.from('meta').select('key, value').eq('key', 'techs'),
       sb.from('meta').select('key, value').eq('key', 'dismissedDupes'),
       sb.from('meta').select('key, value').eq('key', 'recurring'),
+      sb.from('estimates').select('id, data'),
+      sb.from('meta').select('key, value').eq('key', 'estimateTemplates'),
+      sb.from('meta').select('key, value').eq('key', 'addonPackages'),
     ]);
     if (leadsRes.error || custsRes.error || jobsRes.error) throw new Error('Supabase fetch failed');
     state.leads     = (leadsRes.data  || []).map(r => r.data);
@@ -2226,6 +2422,17 @@ async function load() {
     if (recurRes.data && recurRes.data[0] && Array.isArray(recurRes.data[0].value)) {
       state.recurring = recurRes.data[0].value;
     }
+    state.estimates        = (estRes.data    || []).map(r => r.data);
+  // Auto-flag expired estimates
+  const nowTs = Date.now();
+  state.estimates.forEach(e => {
+    if (e.expiresAt && e.expiresAt < nowTs && !['converted','declined','expired'].includes(e.status||'draft')) {
+      e.status = 'expired';
+      saveOneEstimate(e);
+    }
+  });
+    if (estTplRes.data && estTplRes.data[0]) state.estimateTemplates = estTplRes.data[0].value || [];
+    if (addonRes.data  && addonRes.data[0])  state.addonPackages    = addonRes.data[0].value  || [];
   } catch(e) {
     console.warn('Supabase load failed, using localStorage fallback', e);
     try {
@@ -2300,7 +2507,7 @@ function showView(name, btnEl) {
     jobs:'Jobs', 'job-detail':'Job Detail', 'customer-detail':'Customer Detail',
     'lead-detail':'Lead Detail', invoice:'Invoice', unpaid:'Unpaid Invoices',
     settings:'Settings', pricebook:'Pricebook', finance:'Finance', reporting:'Reports',
-    recurring:'Recurring Jobs'
+    recurring:'Recurring Jobs', 'estimate-detail':'Estimate'
   };
   document.getElementById('page-title').textContent = titles[name] || '';
   // render
@@ -2309,16 +2516,18 @@ function showView(name, btnEl) {
   if (name === 'customers') renderCustomers();
   if (name === 'jobs') renderJobs();
   if (name === 'settings') {
-    if (isTech()) { showView('jobs'); return; }
-    renderSettings(); populateRateInputs(); populateTechsSettings();
+    renderSettings();
+    if (!isTech()) {
+      populateRateInputs(); populateTechsSettings();
+      const rsub = document.getElementById('settings-recurring-sub');
+      if (rsub) {
+        const active = (state.recurring||[]).filter(r => r.active !== false);
+        const due = active.filter(r => recurNextDue(r) <= today());
+        rsub.textContent = active.length + ' schedule' + (active.length !== 1 ? 's' : '') + (due.length ? ' · ' + due.length + ' due' : '');
+      }
+    }
     const ui = document.getElementById('settings-user-info');
     if (ui && currentUser) ui.textContent = 'Signed in as ' + currentUser.username + ' (' + currentUser.role + ')';
-    const rsub = document.getElementById('settings-recurring-sub');
-    if (rsub) {
-      const active = (state.recurring||[]).filter(r => r.active !== false);
-      const due = active.filter(r => recurNextDue(r) <= today());
-      rsub.textContent = active.length + ' schedule' + (active.length !== 1 ? 's' : '') + (due.length ? ' · ' + due.length + ' due' : '');
-    }
   }
   if (name === 'pricebook') renderPricebookView();
   if (name === 'finance') { renderFinance(); }
@@ -2327,6 +2536,16 @@ function showView(name, btnEl) {
 
   const actions = document.getElementById('header-actions');
   actions.innerHTML = '';
+  if (name === 'finance' && currentFinTab === 'estimates') {
+    actions.innerHTML = `<button class="btn btn-primary btn-sm" onclick="openNewEstimate()">+ New</button>`;
+  }
+  if (name === 'estimate-detail' && currentEstimateId) {
+    renderEstimateDetail();
+    const est = state.estimates.find(e => e.id === currentEstimateId);
+    if (est && est.status !== 'converted') {
+      actions.innerHTML = `<button class="btn btn-ghost btn-sm" onclick="openEditEstimate('${currentEstimateId}')">Edit</button>`;
+    }
+  }
   if (name === 'job-detail' && currentJobId) {
     const job = state.jobs.find(j => j.id === currentJobId) || state.archivedJobs.find(j => j.id === currentJobId);
     if (job) {
@@ -2348,6 +2567,8 @@ const ESTIMATE_STATUSES = [
   { key: 'sent',     label: 'Sent',     color: '#3b82f6' },
   { key: 'accepted', label: 'Accepted', color: '#22c55e' },
   { key: 'declined', label: 'Declined', color: '#ef4444' },
+  { key: 'expired',  label: 'Expired',  color: '#f59e0b' },
+  { key: 'converted',label: 'Converted',color: '#8b5cf6' },
 ];
 
 const INVOICE_STATUSES = [
@@ -2380,6 +2601,9 @@ function switchFinTab(tab) {
   document.getElementById('fin-status-chips').style.display = isDeposits ? 'none' : 'flex';
   document.getElementById('fin-list').style.display = isDeposits ? 'none' : 'block';
   document.getElementById('fin-deposits').style.display = isDeposits ? 'block' : 'none';
+  // Sync header + button
+  const actions = document.getElementById('header-actions');
+  if (actions) actions.innerHTML = tab === 'estimates' ? `<button class="btn btn-primary btn-sm" onclick="openNewEstimate()">+ New</button>` : '';
   if (isDeposits) {
     renderDepositManager();
   } else {
@@ -2427,6 +2651,11 @@ function renderDepositManager() {
 
   document.getElementById('fin-count').textContent = `${sortedKeys.length} Deposit Group${sortedKeys.length !== 1 ? 's' : ''}`;
 
+  const exportBar = `<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+    <button class="btn btn-secondary btn-sm" onclick="exportQBJobRegister()">↓ QB Job Register</button>
+    <button class="btn btn-ghost btn-sm" onclick="exportEstimatesCSV()">↓ Estimates CSV</button>
+  </div>`;
+
   const html = sortedKeys.map(key => {
     const payments = groups[key];
     const total = payments.reduce((s, p) => s + p.amount, 0);
@@ -2469,7 +2698,7 @@ function renderDepositManager() {
     </div>`;
   }).join('');
 
-  document.getElementById('fin-deposits').innerHTML = html;
+  document.getElementById('fin-deposits').innerHTML = exportBar + html;
 }
 
 function markGroupDeposited(depositDate) {
@@ -2519,10 +2748,102 @@ function exportDepositCSV(depositDate) {
   a.click();
 }
 
+// ── QB Job Register Export
+// Full invoice register — one row per invoice, all statuses.
+// Bookkeeper imports to QB as Sales Receipts or Invoices.
+function exportQBJobRegister() {
+  const allJobs = [...(state.jobs||[]), ...(state.archivedJobs||[])].filter(j =>
+    j.lineItems && j.lineItems.length > 0
+  ).sort((a,b) => (a.jobNumber||0)-(b.jobNumber||0));
+
+  const rows = [[
+    'Job #','Date','Customer','Address','Job Type','Invoice Status',
+    'Subtotal','Tax','Invoice Total','Amount Paid','Balance Due',
+    'Payment Method','Payment Date','Check #','Written Off','Written Off Reason'
+  ]];
+
+  allJobs.forEach(job => {
+    const cust = state.customers.find(c=>c.id===job.customerId);
+    const custName = cust ? cust.name : (job.customerName||'');
+    const total = getInvoiceTotal(job);
+    const tax = getInvoiceTax ? getInvoiceTax(job) : 0;
+    const subtotal = total - tax;
+    const paid = getTotalPaid(job);
+    const balance = total - paid;
+    const payments = (job.payments||[]).filter(p=>!p.refunded);
+    const lastPay = payments.length ? payments[payments.length-1] : null;
+    const jobDate = job.scheduledDate || (job.createdAt ? new Date(job.createdAt).toISOString().slice(0,10) : '');
+    rows.push([
+      job.jobNumber||'',
+      jobDate,
+      custName,
+      job.address||'',
+      job.type||'Service',
+      job.invoiceStatus||'draft',
+      subtotal.toFixed(2),
+      tax.toFixed(2),
+      total.toFixed(2),
+      paid.toFixed(2),
+      balance.toFixed(2),
+      lastPay ? lastPay.method : '',
+      lastPay ? (lastPay.depositDate||lastPay.recordedAt ? new Date(lastPay.recordedAt||Date.now()).toISOString().slice(0,10) : '') : '',
+      lastPay ? (lastPay.ref||'') : '',
+      job.invoiceStatus==='written-off' ? 'Yes' : 'No',
+      job.writtenOffReason||''
+    ]);
+  });
+
+  const csv = rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = `QB_JobRegister_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+// ── Estimates Export CSV
+function exportEstimatesCSV() {
+  const rows = [['EST #','Date','Customer','Address','Status','Scope','Base Total','Add-On Total','Grand Total','Add-Ons Accepted','Expires','Converted Job #']];
+  (state.estimates||[]).sort((a,b)=>(a.estimateNumber||0)-(b.estimateNumber||0)).forEach(est => {
+    const cust = state.customers.find(c=>c.id===est.customerId);
+    const custName = cust ? cust.name : (est.customerName||'');
+    const base = (est.lineItems||[]).reduce((s,li)=>s+((li.rate||0)*(li.qty||1)),0);
+    const acceptedAddons = (est.addons||[]).filter(a=>a.accepted);
+    const addonTotal = acceptedAddons.reduce((s,a)=>(a.lineItems||[]).reduce((ss,li)=>ss+((li.rate||0)*(li.qty||1)),ss),0);
+    const linkedJob = est.convertedJobId ? state.jobs.find(j=>j.id===est.convertedJobId)||state.archivedJobs.find(j=>j.id===est.convertedJobId) : null;
+    rows.push([
+      'EST-'+String(est.estimateNumber||'').padStart(4,'0'),
+      est.createdAt ? new Date(est.createdAt).toISOString().slice(0,10) : '',
+      custName,
+      est.address||'',
+      est.status||'draft',
+      est.notes||'',
+      base.toFixed(2),
+      addonTotal.toFixed(2),
+      (base+addonTotal).toFixed(2),
+      acceptedAddons.map(a=>a.name).join('; '),
+      est.expiresAt ? new Date(est.expiresAt).toISOString().slice(0,10) : '',
+      linkedJob ? String(linkedJob.jobNumber) : ''
+    ]);
+  });
+  const csv = rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = `Estimates_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+
 function renderFinance() {
   const tab = currentFinTab;
   const q = (document.getElementById('fin-search')?.value || '').toLowerCase();
   const statuses = tab === 'estimates' ? ESTIMATE_STATUSES : INVOICE_STATUSES;
+
+  // Update Estimates tab label with open count
+  const estTabBtn = document.getElementById('fin-tab-estimates');
+  if (estTabBtn) {
+    const openCount = (state.estimates||[]).filter(e => !['converted','declined','expired'].includes(e.status||'draft')).length;
+    estTabBtn.textContent = openCount && activeFinStatus === null ? `Estimates (${openCount} open)` : 'Estimates';
+  }
 
   // Build status chips
   const chipsEl = document.getElementById('fin-status-chips');
@@ -2533,62 +2854,83 @@ function renderFinance() {
     }).join('');
   }
 
-  // Get jobs for this tab
-  const allJobs = [...(state.jobs || []), ...(state.archivedJobs || [])];
-  let items;
   if (tab === 'estimates') {
-    items = allJobs.filter(j => j.status === 'estimate' || j.estimateStatus);
-  } else {
-    // All jobs that have progressed past estimate — have line items or are active/completed
-    const invoiceStatuses = ['in-progress','completed','paid','closed'];
-    items = allJobs.filter(j =>
-      (j.invoiceStatus && j.invoiceStatus !== 'none') ||
-      invoiceStatuses.includes(j.status) ||
-      (j.lineItems && j.lineItems.length > 0)
-    );
-  }
-
-  // Status filter
-  if (activeFinStatus) {
-    if (tab === 'estimates') {
-      items = items.filter(j => (j.estimateStatus || 'draft') === activeFinStatus);
-    } else {
-      items = items.filter(j => (j.invoiceStatus || 'draft') === activeFinStatus);
+    // ── ESTIMATES — standalone state.estimates records ──
+    let items = [...(state.estimates || [])];
+    if (activeFinStatus) items = items.filter(e => (e.status || 'draft') === activeFinStatus);
+    if (q) {
+      items = items.filter(e => {
+        const cust = state.customers.find(c => c.id === e.customerId);
+        return (cust ? cust.name : '').toLowerCase().includes(q) ||
+          String(e.estimateNumber || '').includes(q) ||
+          (e.address || '').toLowerCase().includes(q) ||
+          (e.status || '').includes(q);
+      });
     }
+    items.sort((a,b) => (b.createdAt||0) - (a.createdAt||0));
+    document.getElementById('fin-count').textContent = items.length + ' Estimate' + (items.length !== 1 ? 's' : '');
+
+    if (!items.length) {
+      document.getElementById('fin-list').innerHTML = `<div class="empty-state"><p>No estimates yet. Tap + to create one.</p></div>`;
+      return;
+    }
+    document.getElementById('fin-list').innerHTML = items.map(est => {
+      const cust = state.customers.find(c => c.id === est.customerId);
+      const custName = cust ? cust.name : (est.customerName || 'Unknown');
+      const total = fmtMoney(calcEstimateTotal(est));
+      const s = ESTIMATE_STATUSES.find(x => x.key === (est.status||'draft')) || ESTIMATE_STATUSES[0];
+      const badge = `<span class="badge" style="background:${s.color}22;color:${s.color};font-size:11px;font-weight:700">${s.label}</span>`;
+      const acceptedAddons = (est.addons||[]).filter(a => a.accepted);
+      const addonSummary = acceptedAddons.length ? `<div style="font-size:11px;color:var(--text3);margin-top:3px">+${acceptedAddons.length} add-on${acceptedAddons.length!==1?'s':''} accepted</div>` : '';
+      const expiry = est.expiresAt ? `<div style="font-size:11px;color:${new Date(est.expiresAt)<new Date()?'var(--red-l)':'var(--text3)'};margin-top:3px">Expires ${fmtDate(est.expiresAt)}</div>` : '';
+      const linkedJob = est.convertedJobId ? state.jobs.find(j=>j.id===est.convertedJobId)||state.archivedJobs.find(j=>j.id===est.convertedJobId) : null;
+      const convertedNote = linkedJob ? `<div style="font-size:11px;color:var(--green);margin-top:3px">→ Job #${linkedJob.jobNumber}</div>` : '';
+      return `<div class="card" style="margin-bottom:8px;cursor:pointer" onclick="openEstimateDetail('${est.id}')">
+        <div class="card-header">
+          <div>
+            <div class="card-title">${custName}</div>
+            <div class="card-sub">${est.address || ''} ${est.estimateNumber ? '· EST-'+String(est.estimateNumber).padStart(4,'0') : ''}</div>
+            ${addonSummary}${expiry}${convertedNote}
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            ${badge}
+            <div style="font-size:13px;font-weight:700;margin-top:4px;color:var(--text)">${total}</div>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+    return;
   }
 
-  // Search filter
+  // ── INVOICES / DEPOSITS ──
+  const allJobs = [...(state.jobs || []), ...(state.archivedJobs || [])];
+  let items = allJobs.filter(j =>
+    (j.invoiceStatus && j.invoiceStatus !== 'none') ||
+    ['completed','paid','closed'].includes(j.status) ||
+    (j.lineItems && j.lineItems.length > 0)
+  );
+  if (activeFinStatus) items = items.filter(j => (j.invoiceStatus || 'draft') === activeFinStatus);
   if (q) {
     items = items.filter(j => {
-      const statusKey = tab === 'estimates' ? (j.estimateStatus || 'draft') : (j.invoiceStatus || 'draft');
+      const statusKey = j.invoiceStatus || 'draft';
       return (j.customerName || '').toLowerCase().includes(q) ||
         String(j.jobNumber || '').includes(q) ||
         (j.address || '').toLowerCase().includes(q) ||
         statusKey.includes(q);
     });
   }
-
-  // Sort newest first
   items.sort((a,b) => (b.createdAt||0) - (a.createdAt||0));
 
-  const label = tab === 'estimates' ? 'Estimate' : 'Invoice';
-  document.getElementById('fin-count').textContent = items.length + ' ' + label + (items.length !== 1 ? 's' : '');
+  document.getElementById('fin-count').textContent = items.length + ' Invoice' + (items.length !== 1 ? 's' : '');
 
   if (!items.length) {
-    document.getElementById('fin-list').innerHTML = `<div class="empty-state"><p>No ${label.toLowerCase()}s found.</p></div>`;
+    document.getElementById('fin-list').innerHTML = `<div class="empty-state"><p>No invoices found.</p></div>`;
     return;
   }
 
   document.getElementById('fin-list').innerHTML = items.map(j => {
-    const statusKey = tab === 'estimates' ? (j.estimateStatus || 'draft') : (j.invoiceStatus || 'draft');
-    const total = tab === 'invoices' ? fmtMoney(calcJobTotal(j)) : (j.estimateTotal ? fmtMoney(j.estimateTotal) : '—');
-    const estButtons = tab === 'estimates' ? `
-      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:8px" onclick="event.stopPropagation()">
-        ${ESTIMATE_STATUSES.map(s => {
-          const active = statusKey === s.key;
-          return `<button onclick="setEstimateStatus('${j.id}','${s.key}')" style="padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--font);border:1.5px solid ${s.color};background:${active ? s.color : 'transparent'};color:${active ? '#fff' : s.color}">${s.label}</button>`;
-        }).join('')}
-      </div>` : '';
+    const statusKey = j.invoiceStatus || 'draft';
+    const total = fmtMoney(calcJobTotal(j));
     return `<div class="card" style="margin-bottom:8px;cursor:pointer" onclick="openJobDetail('${j.id}')">
       <div class="card-header">
         <div>
@@ -2601,7 +2943,6 @@ function renderFinance() {
         </div>
       </div>
       ${j.scheduledDate ? `<div style="font-size:12px;color:var(--text3);margin-top:6px">${fmtDate(j.scheduledDate)}</div>` : ''}
-      ${estButtons}
     </div>`;
   }).join('');
 }
@@ -2614,6 +2955,13 @@ function toggleFinStatus(key) {
 function calcJobTotal(job) {
   if (!job || !job.lineItems) return 0;
   return job.lineItems.reduce((sum, li) => sum + ((li.rate || 0) * (li.qty || 1)), 0);
+}
+function calcEstimateTotal(est) {
+  if (!est) return 0;
+  const base = (est.lineItems||[]).reduce((s,li) => s + ((li.rate||0)*(li.qty||1)), 0);
+  const addons = (est.addons||[]).filter(a => a.accepted).reduce((s,a) =>
+    s + (a.lineItems||[]).reduce((ss,li) => ss + ((li.rate||0)*(li.qty||1)), 0), 0);
+  return base + addons;
 }
 
 function showJobsTab(tab) {
@@ -2707,6 +3055,16 @@ function fmtTime(t) {
   h = h % 12 || 12;
   return h + ':' + m + ' ' + ampm;
 }
+function showToast(msg, type = 'info', duration = 2800) {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+  const t = document.createElement('div');
+  t.className = 'toast ' + type;
+  t.textContent = msg;
+  container.appendChild(t);
+  setTimeout(() => { t.style.opacity='0'; t.style.transition='opacity .3s'; setTimeout(()=>t.remove(), 300); }, duration);
+}
+
 function fmtMoney(n) {
   return '$' + Number(n||0).toLocaleString('en-US', { minimumFractionDigits:2, maximumFractionDigits:2 });
 }
@@ -2838,6 +3196,8 @@ function renderDashboard() {
   const unpaidTotal = unpaidInvoices.reduce((s,j) => s + getInvoiceTotal(j), 0);
   const completedUnbilled = state.jobs.filter(j => j.status === 'completed').filter(techFilter);
 
+  const openEstimates = (state.estimates||[]).filter(e => !['converted','declined','expired'].includes(e.status||'draft'));
+  const openEstTotal  = openEstimates.reduce((s,e) => s + calcEstimateTotal(e), 0);
   document.getElementById('stat-strip').innerHTML = `
     <div class="stat-card" onclick="showJobsTab('active')" style="cursor:pointer">
       <div class="stat-num" style="color:var(--red)">${todayJobs.length}</div>
@@ -2851,6 +3211,10 @@ function renderDashboard() {
       <div class="stat-num" style="color:var(--yellow);font-size:${unpaidTotal>=10000?'18px':'22px'}">${isTech() ? unpaidInvoices.length : fmtMoney(unpaidTotal)}</div>
       <div class="stat-lbl">${isTech() ? 'Unpaid Jobs' : 'Unpaid'}</div>
     </div>
+    ${!isTech() ? `<div class="stat-card" onclick="switchFinTab('estimates');showView('finance')" style="cursor:pointer">
+      <div class="stat-num" style="color:var(--blue);font-size:${openEstTotal>=10000?'18px':'22px'}">${fmtMoney(openEstTotal)}</div>
+      <div class="stat-lbl">Estimates (${openEstimates.length})</div>
+    </div>` : ''}
   `;
 
   const daj = document.getElementById('dash-active-jobs');
@@ -3658,6 +4022,7 @@ function openCustomerDetail(id) {
             New Job
           </button>`
       }
+      <button class="btn btn-secondary" onclick="openNewEstimate('${c.id}')">+ Estimate</button>
       <button class="btn btn-ghost" onclick="editCustomer('${c.id}')">Edit</button>
     </div>
     <!-- ASSETS -->
@@ -3684,6 +4049,28 @@ function openCustomerDetail(id) {
         </div>
       `).join('') : '<div style="color:var(--text3);font-size:13px;padding:4px 0">No equipment recorded.</div>'}
     </div>
+    <!-- ESTIMATES -->
+    ${(() => {
+      const ests = (state.estimates||[]).filter(e=>e.customerId===id).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+      if (!ests.length && isTech()) return '';
+      const cards = ests.map(est => {
+        const s = ESTIMATE_STATUSES.find(x=>x.key===(est.status||'draft'))||ESTIMATE_STATUSES[0];
+        return `<div class="card" style="margin-bottom:8px;cursor:pointer" onclick="openEstimateDetail('${est.id}')">
+          <div class="card-header">
+            <div>
+              <div class="card-title">EST-${String(est.estimateNumber||'').padStart(4,'0')}</div>
+              <div class="card-sub">${est.notes ? est.notes.slice(0,50)+(est.notes.length>50?'…':'') : (est.address||'—')}</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0">
+              <span class="badge" style="background:${s.color}22;color:${s.color};font-size:11px;font-weight:700">${s.label}</span>
+              <div style="font-size:13px;font-weight:700;margin-top:4px">${fmtMoney(calcEstimateTotal(est))}</div>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+      return `<div class="detail-section-title" style="margin-bottom:8px">Estimates (${ests.length})</div>
+        ${cards || '<div style="color:var(--text3);font-size:13px;margin-bottom:14px">No estimates yet.</div>'}`;
+    })()}
     <div class="detail-section-title">Job History (${jobs.length})</div>
     ${jobs.length ? jobs.map(j => jobCard(j, true)).join('') : '<div style="color:var(--text3);font-size:14px;padding:12px 0">No jobs yet</div>'}
     ${!isTech() ? `<button class="btn btn-danger" style="margin-top:12px" onclick="openDeleteCustomerModal('${c.id}')">Delete Customer</button>` : ''}
@@ -4037,6 +4424,11 @@ function openJobDetail(id) {
   showView('job-detail');
 }
 
+// Alias used from job detail status card — opens invoice for the current job
+function openJobInvoice(jobId) {
+  openInvoice(jobId);
+}
+
 function renderJobDetail() {
   const id = currentJobId;
   const job = state.jobs.find(j => j.id === id) || state.archivedJobs.find(j => j.id === id);
@@ -4102,6 +4494,11 @@ function renderJobDetail() {
         <div>
           <div style="font-size:18px;font-weight:700">Job #${job.jobNumber}</div>
           <div style="font-size:13px;color:var(--text2);margin-top:2px">${job.type||'General'}</div>
+          ${job.estimateId ? (() => {
+            const linkedEst = (state.estimates||[]).find(e => e.id === job.estimateId);
+            const estNum = linkedEst ? 'EST-'+String(linkedEst.estimateNumber||'').padStart(4,'0') : 'Estimate';
+            return `<div style="margin-top:4px"><button onclick="openEstimateDetail('${job.estimateId}')" style="background:none;font-size:11px;color:var(--blue);padding:0;text-decoration:none;border:1px solid var(--blue);border-radius:4px;padding:2px 7px;cursor:pointer">From ${estNum}</button></div>`;
+          })() : ''}
         </div>
         ${statusBadge(job.status)}
       </div>
@@ -4156,6 +4553,18 @@ function renderJobDetail() {
       ${['unscheduled','scheduled','invoiced','paid'].includes(job.status) ? `
         <div style="margin-top:8px">
           <button class="btn btn-ghost btn-sm" onclick="showManualStatusOverride('${id}')">Override Status</button>
+        </div>
+      ` : ''}
+      ${['invoiced','paid'].includes(job.status) ? `
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-secondary btn-sm" onclick="openJobInvoice('${id}')">View Invoice</button>
+          <button class="btn btn-ghost btn-sm" onclick="printInvoice('${id}')">Print Invoice</button>
+          ${job.invoiceStatus !== 'paid' ? `<button class="btn btn-success btn-sm" onclick="openPaymentModal('${id}')">Record Payment</button>` : ''}
+        </div>
+      ` : ''}
+      ${job.status === 'completed' && !['invoiced','paid'].includes(job.invoiceStatus||'') ? `
+        <div style="margin-top:10px">
+          <button class="btn btn-primary btn-sm" onclick="openJobInvoice('${id}')">Create Invoice</button>
         </div>
       ` : ''}
     </div>
@@ -5713,6 +6122,789 @@ function setEstimateStatus(jobId, status) {
   if (currentView === 'job-detail') renderJobDetail();
 }
 
+// ──────────────────────────────────────────────────────────
+// ESTIMATE SYSTEM — standalone estimates, add-ons, templates
+// ──────────────────────────────────────────────────────────
+let currentEstimateId = null;
+let estAddonEditIndex  = null; // which addon slot is open in modal-addon
+let approveByMode      = 'internal'; // 'internal' | 'customer'
+
+// ── Open / close estimate detail
+function openEstimateDetail(id) {
+  currentEstimateId = id;
+  const est = state.estimates.find(e => e.id === id);
+  if (est) {
+    document.getElementById('page-title').textContent = 'EST-' + String(est.estimateNumber||'').padStart(4,'0');
+  }
+  showView('estimate-detail');
+}
+
+function renderEstimateDetail() {
+  const est = state.estimates.find(e => e.id === currentEstimateId);
+  if (!est) { document.getElementById('estimate-detail-content').innerHTML = '<p>Estimate not found.</p>'; return; }
+  const cust = state.customers.find(c => c.id === est.customerId);
+  const custName = cust ? cust.name : (est.customerName || 'Unknown');
+  const s = ESTIMATE_STATUSES.find(x => x.key === (est.status||'draft')) || ESTIMATE_STATUSES[0];
+  const badge = `<span class="badge" style="background:${s.color}22;color:${s.color};font-size:12px;font-weight:700">${s.label}</span>`;
+  const baseTotal = (est.lineItems||[]).reduce((s,li)=>s+((li.rate||0)*(li.qty||1)),0);
+  const acceptedAddons = (est.addons||[]).filter(a=>a.accepted);
+  const addonTotal = acceptedAddons.reduce((s,a)=>(a.lineItems||[]).reduce((ss,li)=>ss+((li.rate||0)*(li.qty||1)),s),0);
+  const grandTotal = baseTotal + addonTotal;
+
+  const canApprove = !['converted','declined','expired'].includes(est.status||'draft');
+  const canConvert = est.status === 'accepted' && !est.convertedJobId;
+  const linkedJob  = est.convertedJobId ? (state.jobs.find(j=>j.id===est.convertedJobId)||state.archivedJobs.find(j=>j.id===est.convertedJobId)) : null;
+
+  const lineItemsHtml = (est.lineItems||[]).map(li => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div>
+        <div style="font-size:14px;color:var(--text)">${li.desc}</div>
+        <div style="font-size:12px;color:var(--text3)">Qty ${li.qty} × ${fmtMoney(li.rate)}</div>
+      </div>
+      <div style="font-size:14px;font-weight:600;color:var(--text)">${fmtMoney((li.qty||1)*(li.rate||0))}</div>
+    </div>`).join('');
+
+  const addonsHtml = (est.addons||[]).length ? (est.addons||[]).map((a,i) => {
+    const aTotal = (a.lineItems||[]).reduce((s,li)=>s+((li.rate||0)*(li.qty||1)),0);
+    const aItems = (a.lineItems||[]).map(li=>`<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);padding:3px 0"><span>${li.qty}× ${li.desc}</span><span>${fmtMoney((li.qty||1)*(li.rate||0))}</span></div>`).join('');
+    const accepted = a.accepted;
+    return `<div class="card" style="margin-bottom:8px;border:1.5px solid ${accepted?'var(--green)':'var(--border)'}">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <div>
+          <div style="font-size:14px;font-weight:700;color:var(--text)">${a.name}</div>
+          ${a.desc ? `<div style="font-size:12px;color:var(--text3)">${a.desc}</div>` : ''}
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:14px;font-weight:700;color:var(--text)">${fmtMoney(aTotal)}</div>
+          <span style="font-size:11px;font-weight:700;color:${accepted?'var(--green)':'var(--text3)'}">${accepted?'✓ ACCEPTED':'OPTIONAL'}</span>
+        </div>
+      </div>
+      ${aItems}
+    </div>`;
+  }).join('') : '<div style="font-size:13px;color:var(--text3);margin-bottom:12px">No add-on packages.</div>';
+
+  const historyHtml = (est.history||[]).slice().reverse().map(h => {
+    const who = h.approvedBy ? ` — ${h.approvedBy}` : '';
+    return `<div style="font-size:12px;color:var(--text3);padding:4px 0;border-bottom:1px solid var(--border)">${h.action}${who} <span style="float:right">${fmtDateTime(h.at)}</span></div>`;
+  }).join('') || '<div style="font-size:12px;color:var(--text3)">No history yet.</div>';
+
+  document.getElementById('estimate-detail-content').innerHTML = `
+    <div class="card" style="margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+        <div>
+          <div style="font-size:18px;font-weight:700;color:var(--text)">${custName}</div>
+          ${est.address ? `<div style="font-size:13px;color:var(--text2);margin-top:2px">${est.address}</div>` : ''}
+          <div style="font-size:12px;color:var(--text3);margin-top:2px">EST-${String(est.estimateNumber||'').padStart(4,'0')}</div>
+        </div>
+        <div style="text-align:right">${badge}</div>
+      </div>
+      ${est.notes ? `<div style="font-size:13px;color:var(--text2);padding:10px;background:var(--surface2);border-radius:8px;margin-bottom:8px">${est.notes}</div>` : ''}
+      ${est.expiresAt ? `<div style="font-size:12px;color:${new Date(est.expiresAt)<new Date()?'var(--red-l)':'var(--text3)'}">Expires ${fmtDate(est.expiresAt)}</div>` : ''}
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-title" style="margin-bottom:8px">Base Scope</div>
+      ${lineItemsHtml || '<div style="font-size:13px;color:var(--text3)">No line items.</div>'}
+      <div style="display:flex;justify-content:space-between;padding-top:10px;font-size:14px;font-weight:700;color:var(--text)">
+        <span>Base Total</span><span>${fmtMoney(baseTotal)}</span>
+      </div>
+    </div>
+
+    <div style="margin-bottom:16px">
+      <div class="card-title" style="margin-bottom:8px">Add-On Packages</div>
+      ${addonsHtml}
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700;color:var(--text)">
+        <span>Estimate Total</span><span>${fmtMoney(grandTotal)}</span>
+      </div>
+      ${acceptedAddons.length ? `<div style="font-size:12px;color:var(--text3);margin-top:4px">Includes ${acceptedAddons.length} accepted add-on${acceptedAddons.length!==1?'s':''}</div>` : ''}
+    </div>
+
+    ${linkedJob ? `<div class="card" style="margin-bottom:16px;border:1.5px solid var(--green)">
+      <div style="font-size:13px;font-weight:700;color:var(--green)">Converted → Job #${linkedJob.jobNumber}</div>
+      <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="openJobDetail('${linkedJob.id}')">View Job</button>
+    </div>` : ''}
+
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+      ${canApprove ? `<button class="btn btn-success" style="flex:1" onclick="openApproveEstimate('${est.id}')">Approve Estimate</button>` : ''}
+      ${canConvert ? `<button class="btn btn-primary" style="flex:1" onclick="convertEstimateToJob('${est.id}')">Convert to Job</button>` : ''}
+      ${canApprove ? `<button class="btn btn-danger btn-sm" onclick="declineEstimate('${est.id}')">Decline</button>` : ''}
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:16px">
+      <button class="btn btn-secondary" style="flex:1" onclick="printEstimate('${est.id}')">🖨 Print / PDF</button>
+      ${['draft','sent'].includes(est.status||'draft') ? `<button class="btn btn-ghost" style="flex:1" onclick="shareEstimate('${est.id}')">📋 Copy Summary</button>` : ''}
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-title" style="margin-bottom:8px">History</div>
+      ${historyHtml}
+    </div>
+
+    ${!isTech() ? `<button class="btn btn-danger" style="width:100%;margin-top:8px" onclick="confirmDeleteEstimate('${est.id}')">Delete Estimate</button>` : ''}
+  `;
+}
+
+// ── New / Edit estimate modal
+function openNewEstimate(customerId) {
+  document.getElementById('est-edit-id').value = '';
+  document.getElementById('modal-estimate-title').textContent = 'New Estimate';
+  // Populate customer dropdown
+  const sel = document.getElementById('est-customer-id');
+  sel.innerHTML = '<option value="">Select customer…</option>' +
+    (state.customers||[]).sort((a,b)=>a.name.localeCompare(b.name))
+      .map(c=>`<option value="${c.id}"${c.id===customerId?'selected':''}>${c.name}</option>`).join('');
+  if (customerId) {
+    const c = state.customers.find(x=>x.id===customerId);
+    document.getElementById('est-address').value = c ? (c.address||'') : '';
+  } else {
+    document.getElementById('est-address').value = '';
+  }
+  document.getElementById('est-notes').value = '';
+  // Default expiry = 30 days
+  const d = new Date(); d.setDate(d.getDate()+30);
+  document.getElementById('est-expires').value = d.toISOString().slice(0,10);
+  // Populate template picker
+  const tSel = document.getElementById('est-template-select');
+  tSel.innerHTML = '<option value="">— Start blank —</option>' +
+    (state.estimateTemplates||[]).map((t,i)=>`<option value="${i}">${t.name}</option>`).join('');
+  // Reset line items and addons
+  window._estLineItems = [];
+  window._estAddons = [];
+  renderEstLineItems();
+  renderEstAddons();
+  openModal('modal-estimate');
+}
+
+function openEditEstimate(id) {
+  const est = state.estimates.find(e=>e.id===id);
+  if (!est) return;
+  document.getElementById('est-edit-id').value = id;
+  document.getElementById('modal-estimate-title').textContent = 'Edit Estimate';
+  const sel = document.getElementById('est-customer-id');
+  sel.innerHTML = '<option value="">Select customer…</option>' +
+    (state.customers||[]).sort((a,b)=>a.name.localeCompare(b.name))
+      .map(c=>`<option value="${c.id}"${c.id===est.customerId?'selected':''}>${c.name}</option>`).join('');
+  document.getElementById('est-address').value = est.address || '';
+  document.getElementById('est-notes').value   = est.notes   || '';
+  document.getElementById('est-expires').value  = est.expiresAt ? new Date(est.expiresAt).toISOString().slice(0,10) : '';
+  const tSel = document.getElementById('est-template-select');
+  tSel.innerHTML = '<option value="">— Start blank —</option>' +
+    (state.estimateTemplates||[]).map((t,i)=>`<option value="${i}">${t.name}</option>`).join('');
+  window._estLineItems = JSON.parse(JSON.stringify(est.lineItems||[]));
+  window._estAddons    = JSON.parse(JSON.stringify(est.addons||[]));
+  renderEstLineItems();
+  renderEstAddons();
+  openModal('modal-estimate');
+}
+
+function onEstCustomerChange() {
+  const id = document.getElementById('est-customer-id').value;
+  const c = state.customers.find(x=>x.id===id);
+  const addrField = document.getElementById('est-address');
+  if (c && c.address && !addrField.value.trim()) addrField.value = c.address;
+}
+
+function loadEstimateTemplate() {
+  const idx = document.getElementById('est-template-select').value;
+  if (idx === '') return;
+  const tpl = (state.estimateTemplates||[])[parseInt(idx)];
+  if (!tpl) return;
+  document.getElementById('est-notes').value = tpl.notes || '';
+  window._estLineItems = JSON.parse(JSON.stringify(tpl.lineItems||[]));
+  window._estAddons    = JSON.parse(JSON.stringify(tpl.addons||[]));
+  renderEstLineItems();
+  renderEstAddons();
+}
+
+function addEstLineItem() {
+  window._estLineItems = window._estLineItems || [];
+  window._estLineItems.push({ desc:'', qty:1, rate:0 });
+  renderEstLineItems();
+}
+function removeEstLineItem(i) {
+  window._estLineItems.splice(i,1);
+  renderEstLineItems();
+}
+function renderEstLineItems() {
+  const items = window._estLineItems || [];
+  document.getElementById('est-line-items-list').innerHTML = items.map((li,i) => `
+    <div style="display:grid;grid-template-columns:1fr 60px 80px 30px;gap:6px;margin-bottom:8px;align-items:center">
+      <input class="form-input" style="font-size:13px" placeholder="Description" value="${escHtml(li.desc)}" oninput="window._estLineItems[${i}].desc=this.value">
+      <input class="form-input" style="font-size:13px" type="number" min="1" placeholder="Qty" value="${li.qty}" oninput="window._estLineItems[${i}].qty=+this.value">
+      <input class="form-input" style="font-size:13px" type="number" min="0" step="0.01" placeholder="Rate" value="${li.rate}" oninput="window._estLineItems[${i}].rate=+this.value">
+      <button style="background:none;border:none;color:var(--red-l);cursor:pointer;font-size:18px;padding:0" onclick="removeEstLineItem(${i})">×</button>
+    </div>`).join('');
+}
+
+function renderEstAddons() {
+  const addons = window._estAddons || [];
+  document.getElementById('est-addons-list').innerHTML = addons.length
+    ? addons.map((a,i) => {
+        const aTotal = (a.lineItems||[]).reduce((s,li)=>s+((li.rate||0)*(li.qty||1)),0);
+        return `<div class="card" style="margin-bottom:8px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-size:13px;font-weight:700">${escHtml(a.name)}</div>
+              <div style="font-size:12px;color:var(--text3)">${(a.lineItems||[]).length} items · ${fmtMoney(aTotal)}</div>
+            </div>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-ghost btn-sm" onclick="editAddon(${i})">Edit</button>
+              <button class="btn btn-ghost btn-sm" style="color:var(--red-l)" onclick="removeAddon(${i})">×</button>
+            </div>
+          </div>
+        </div>`;
+      }).join('')
+    : '<div style="font-size:13px;color:var(--text3);margin-bottom:12px;text-align:center">No add-on packages yet.</div>';
+}
+
+function addNewAddon() {
+  estAddonEditIndex = null;
+  document.getElementById('modal-addon-title').textContent = 'New Add-On Package';
+  document.getElementById('addon-name').value = '';
+  document.getElementById('addon-desc').value = '';
+  window._addonLineItems = [];
+  renderAddonLineItems();
+  openModal('modal-addon');
+}
+function editAddon(i) {
+  estAddonEditIndex = i;
+  const a = (window._estAddons||[])[i];
+  if (!a) return;
+  document.getElementById('modal-addon-title').textContent = 'Edit Add-On Package';
+  document.getElementById('addon-name').value = a.name || '';
+  document.getElementById('addon-desc').value = a.desc || '';
+  window._addonLineItems = JSON.parse(JSON.stringify(a.lineItems||[]));
+  renderAddonLineItems();
+  openModal('modal-addon');
+}
+function removeAddon(i) {
+  window._estAddons.splice(i,1);
+  renderEstAddons();
+}
+async function saveAddon() {
+  const idx = estAddonEditIndex;
+  const name = document.getElementById('addon-name').value.trim();
+  if (!name) { alert('Package name required.'); return; }
+  // ── Library save paths
+  if (idx === '__library_new__' || (typeof idx === 'string' && idx.startsWith('__library__'))) {
+    const pkg = { name, desc: document.getElementById('addon-desc').value.trim(), lineItems: window._addonLineItems||[] };
+    state.addonPackages = state.addonPackages || [];
+    if (typeof idx === 'string' && idx.startsWith('__library__:')) {
+      state.addonPackages[parseInt(idx.split(':')[1])] = pkg;
+    } else {
+      state.addonPackages.push(pkg);
+    }
+    await saveAddonPackages();
+    closeModal('modal-addon');
+    renderAddonLibraryManager();
+    return;
+  }
+  // ── Estimate addon save
+  try {
+    const pkg = { name, desc: document.getElementById('addon-desc').value.trim(), lineItems: window._addonLineItems||[], accepted: false };
+    window._estAddons = window._estAddons || [];
+    if (idx !== null && typeof idx === 'number') {
+      pkg.accepted = window._estAddons[idx].accepted;
+      window._estAddons[idx] = pkg;
+    } else {
+      window._estAddons.push(pkg);
+    }
+    renderEstAddons();
+    closeModal('modal-addon');
+    showToast('Add-on saved', 'success');
+  } catch(e) {
+    console.error('saveAddon error:', e);
+    showToast('Save failed — check connection', 'error');
+  }
+}
+
+function addAddonLineItem() {
+  window._addonLineItems = window._addonLineItems || [];
+  window._addonLineItems.push({ desc:'', qty:1, rate:0 });
+  renderAddonLineItems();
+}
+function removeAddonLineItem(i) {
+  window._addonLineItems.splice(i,1);
+  renderAddonLineItems();
+}
+function renderAddonLineItems() {
+  const items = window._addonLineItems || [];
+  document.getElementById('addon-line-items-list').innerHTML = items.map((li,i) => `
+    <div style="display:grid;grid-template-columns:1fr 60px 80px 30px;gap:6px;margin-bottom:8px;align-items:center">
+      <input class="form-input" style="font-size:13px" placeholder="Description" value="${escHtml(li.desc)}" oninput="window._addonLineItems[${i}].desc=this.value">
+      <input class="form-input" style="font-size:13px" type="number" min="1" placeholder="Qty" value="${li.qty}" oninput="window._addonLineItems[${i}].qty=+this.value">
+      <input class="form-input" style="font-size:13px" type="number" min="0" step="0.01" placeholder="Rate" value="${li.rate}" oninput="window._addonLineItems[${i}].rate=+this.value">
+      <button style="background:none;border:none;color:var(--red-l);cursor:pointer;font-size:18px;padding:0" onclick="removeAddonLineItem(${i})">×</button>
+    </div>`).join('') || '<div style="font-size:13px;color:var(--text3);margin-bottom:8px">No items yet.</div>';
+}
+
+// ── Addon library picker
+function addAddonFromLibrary() {
+  const lib = state.addonPackages || [];
+  if (!lib.length) { alert('No packages in library yet. Use the Template Manager in Settings to build your library.'); return; }
+  document.getElementById('addon-library-list').innerHTML = lib.map((pkg,i) => {
+    const aTotal = (pkg.lineItems||[]).reduce((s,li)=>s+((li.rate||0)*(li.qty||1)),0);
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+      <input type="checkbox" id="alib-${i}" value="${i}" style="width:18px;height:18px;accent-color:var(--red)">
+      <label for="alib-${i}" style="flex:1;cursor:pointer">
+        <div style="font-size:14px;font-weight:600">${escHtml(pkg.name)}</div>
+        <div style="font-size:12px;color:var(--text3)">${pkg.desc || ''} · ${fmtMoney(aTotal)}</div>
+      </label>
+    </div>`;
+  }).join('');
+  openModal('modal-addon-library');
+}
+function confirmAddonLibraryPick() {
+  const lib = state.addonPackages || [];
+  window._estAddons = window._estAddons || [];
+  document.querySelectorAll('#addon-library-list input[type=checkbox]:checked').forEach(cb => {
+    const pkg = lib[parseInt(cb.value)];
+    if (pkg) window._estAddons.push(JSON.parse(JSON.stringify({ ...pkg, accepted: false })));
+  });
+  renderEstAddons();
+  closeModal('modal-addon-library');
+}
+
+// ── Save estimate
+async function saveEstimate() {
+  const editId = document.getElementById('est-edit-id').value;
+  // ── Template save paths
+  if (editId === '__template__') {
+    const name = window._estTemplateName || 'Unnamed';
+    state.estimateTemplates = state.estimateTemplates || [];
+    state.estimateTemplates.push({ name, notes: document.getElementById('est-notes').value.trim(), lineItems: window._estLineItems||[], addons: window._estAddons||[] });
+    await saveEstimateTemplates();
+    document.getElementById('est-customer-id').closest('.form-group').style.display = '';
+    document.getElementById('est-address').closest('.form-group').style.display = '';
+    document.getElementById('est-expires').closest('.form-group').style.display = '';
+    document.getElementById('est-template-row').style.display = '';
+    closeModal('modal-estimate');
+    renderEstimateTemplates();
+    return;
+  }
+  if (editId && editId.startsWith('__template__:')) {
+    const i = parseInt(editId.split(':')[1]);
+    const tpl = (state.estimateTemplates||[])[i];
+    if (tpl) {
+      tpl.notes = document.getElementById('est-notes').value.trim();
+      tpl.lineItems = window._estLineItems||[];
+      tpl.addons = window._estAddons||[];
+      await saveEstimateTemplates();
+    }
+    document.getElementById('est-customer-id').closest('.form-group').style.display = '';
+    document.getElementById('est-address').closest('.form-group').style.display = '';
+    document.getElementById('est-expires').closest('.form-group').style.display = '';
+    document.getElementById('est-template-row').style.display = '';
+    closeModal('modal-estimate');
+    renderEstimateTemplates();
+    return;
+  }
+  // ── Real estimate save
+  const custId = document.getElementById('est-customer-id').value;
+  if (!custId) { alert('Select a customer.'); return; }
+  const expires = document.getElementById('est-expires').value;
+  const cust    = state.customers.find(c=>c.id===custId);
+  try {
+    if (editId) {
+      const est = state.estimates.find(e=>e.id===editId);
+      if (!est) return;
+      est.customerId    = custId;
+      est.customerName  = cust ? cust.name : '';
+      est.address       = document.getElementById('est-address').value.trim();
+      est.notes         = document.getElementById('est-notes').value.trim();
+      est.expiresAt     = expires ? new Date(expires).getTime() : null;
+      est.lineItems     = window._estLineItems || [];
+      est.addons        = window._estAddons    || [];
+      est.updatedAt     = Date.now();
+      est.history.push({ action:'edited', at:Date.now(), by: currentUser?.username||'admin' });
+      await saveOneEstimate(est);
+    } else {
+    state.nextId.est = (state.nextId.est||1);
+    const est = {
+      id:              uid('est'),
+      estimateNumber:  state.nextId.est++,
+      customerId:      custId,
+      customerName:    cust ? cust.name : '',
+      address:         document.getElementById('est-address').value.trim(),
+      notes:           document.getElementById('est-notes').value.trim(),
+      expiresAt:       expires ? new Date(expires).getTime() : null,
+      status:          'draft',
+      lineItems:       window._estLineItems || [],
+      addons:          window._estAddons    || [],
+      history:         [{ action:'created', at:Date.now(), by: currentUser?.username||'admin' }],
+      createdAt:       Date.now(),
+      updatedAt:       Date.now(),
+      convertedJobId:  null,
+    };
+    state.estimates.push(est);
+    await sb.from('meta').upsert({ key:'nextId', value:state.nextId },{ onConflict:'key' });
+    await saveOneEstimate(est);
+  }
+  closeModal('modal-estimate');
+  showToast('Estimate saved', 'success');
+  if (currentView === 'finance') renderFinance();
+  if (currentView === 'estimate-detail') renderEstimateDetail();
+  } catch(e) {
+    console.error('saveEstimate error:', e);
+    showToast('Save failed — check connection', 'error');
+  }
+}
+
+// ── Approve estimate modal
+function openApproveEstimate(id) {
+  const est = state.estimates.find(e=>e.id===id);
+  if (!est) return;
+  document.getElementById('est-approve-id').value = id;
+  approveByMode = 'internal';
+  document.getElementById('approve-by-us-btn').classList.replace('btn-ghost','btn-secondary');
+  document.getElementById('approve-by-cust-btn').classList.replace('btn-secondary','btn-ghost');
+  document.getElementById('approve-cust-name-row').style.display = 'none';
+  document.getElementById('approve-cust-name').value = '';
+  // Render addon toggles
+  const addons = est.addons || [];
+  document.getElementById('approve-addons-list').innerHTML = addons.length
+    ? addons.map((a,i) => {
+        const aTotal = (a.lineItems||[]).reduce((s,li)=>s+((li.rate||0)*(li.qty||1)),0);
+        return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+          <input type="checkbox" id="approve-addon-${i}" ${a.accepted?'checked':''} style="width:18px;height:18px;accent-color:var(--green)">
+          <label for="approve-addon-${i}" style="flex:1;cursor:pointer">
+            <div style="font-size:14px;font-weight:600">${escHtml(a.name)}</div>
+            <div style="font-size:12px;color:var(--text3)">${fmtMoney(aTotal)}</div>
+          </label>
+        </div>`;
+      }).join('')
+    : '<div style="font-size:13px;color:var(--text3);margin-bottom:8px">No add-on packages on this estimate.</div>';
+  openModal('modal-est-approve');
+}
+function setApproveBy(mode) {
+  approveByMode = mode;
+  document.getElementById('approve-by-us-btn').className = 'btn btn-' + (mode==='internal'?'secondary':'ghost');
+  document.getElementById('approve-by-cust-btn').className = 'btn btn-' + (mode==='customer'?'secondary':'ghost');
+  document.getElementById('approve-cust-name-row').style.display = mode==='customer'?'block':'none';
+}
+async function confirmApproveEstimate() {
+  const id  = document.getElementById('est-approve-id').value;
+  const est = state.estimates.find(e=>e.id===id);
+  if (!est) return;
+  // Capture addon acceptance
+  (est.addons||[]).forEach((a,i) => {
+    const cb = document.getElementById('approve-addon-'+i);
+    if (cb) a.accepted = cb.checked;
+  });
+  // Record who approved
+  const approvedBy = approveByMode === 'customer'
+    ? (document.getElementById('approve-cust-name').value.trim() || 'Customer')
+    : (currentUser?.username || 'admin');
+  est.status = 'accepted';
+  est.approvedAt = Date.now();
+  est.approvedBy = approvedBy;
+  est.approvedByMode = approveByMode;
+  est.history.push({ action:'approved', at:Date.now(), approvedBy, mode:approveByMode });
+  try {
+    await saveOneEstimate(est);
+    closeModal('modal-est-approve');
+    showToast('Estimate approved', 'success');
+    if (currentView === 'estimate-detail') renderEstimateDetail();
+    if (currentView === 'finance') renderFinance();
+  } catch(e) {
+    console.error('confirmApproveEstimate error:', e);
+    showToast('Save failed — check connection', 'error');
+  }
+}
+
+async function declineEstimate(id) {
+  if (!confirm('Mark this estimate as declined?')) return;
+  const est = state.estimates.find(e=>e.id===id);
+  if (!est) return;
+  est.status = 'declined';
+  est.declinedAt = Date.now();
+  est.history.push({ action:'declined', at:Date.now(), by:currentUser?.username||'admin' });
+  try {
+    await saveOneEstimate(est);
+    showToast('Estimate declined', 'info');
+  } catch(e) {
+    showToast('Save failed — check connection', 'error');
+  }
+  if (currentView === 'estimate-detail') renderEstimateDetail();
+  if (currentView === 'finance') renderFinance();
+}
+
+// ── Convert approved estimate to job
+async function convertEstimateToJob(id) {
+  const est = state.estimates.find(e=>e.id===id);
+  if (!est) return;
+  if (!confirm('Create a new job from this estimate?')) return;
+  const cust = state.customers.find(c=>c.id===est.customerId);
+  // Build job line items = base + accepted add-ons
+  const jobLineItems = [...(est.lineItems||[])];
+  (est.addons||[]).filter(a=>a.accepted).forEach(a => {
+    jobLineItems.push(...(a.lineItems||[]));
+  });
+  const jobNum = Object.values(state.nextId||{}).reduce((mx, v) => typeof v==='number'?Math.max(mx,v):mx, 0);
+  state.nextId.job = (state.nextId.job||1);
+  const job = {
+    id:           uid('job'),
+    jobNumber:    state.nextId.job++,
+    customerId:   est.customerId,
+    customerName: est.customerName || (cust?cust.name:''),
+    address:      est.address || (cust?cust.address:''),
+    status:       'unscheduled',
+    invoiceStatus:'draft',
+    type:         'Service',
+    description:  est.notes || '',
+    lineItems:    jobLineItems,
+    timeLog:      [],
+    payments:     [],
+    history:      [{ action:'created_from_estimate', estimateId:id, at:Date.now() }],
+    estimateId:   id,
+    createdAt:    Date.now(),
+  };
+  state.jobs.push(job);
+  est.status = 'converted';
+  est.convertedJobId = job.id;
+  est.convertedAt = Date.now();
+  est.history.push({ action:'converted_to_job', jobId:job.id, at:Date.now(), by:currentUser?.username||'admin' });
+  try {
+    await Promise.all([
+      saveOne('jobs', job),
+      saveOneEstimate(est),
+      sb.from('meta').upsert({ key:'nextId', value:state.nextId },{ onConflict:'key' }),
+    ]);
+    renderDashboard();
+    showToast(`Job #${job.jobNumber} created`, 'success');
+    openJobDetail(job.id);
+  } catch(e) {
+    console.error('convertEstimateToJob error:', e);
+    showToast('Save failed — check connection', 'error');
+  }
+}
+
+async function confirmDeleteEstimate(id) {
+  if (!confirm('Delete this estimate? This cannot be undone.')) return;
+  await deleteEstimate(id);
+  showToast('Estimate deleted', 'success');
+  showView('finance');
+}
+
+// ── Print / PDF estimate
+function printEstimate(id) {
+  const est = state.estimates.find(e=>e.id===id);
+  if (!est) return;
+  const cust = state.customers.find(c=>c.id===est.customerId);
+  const custName = cust ? cust.name : (est.customerName||'Unknown');
+  const baseTotal = (est.lineItems||[]).reduce((s,li)=>s+((li.rate||0)*(li.qty||1)),0);
+  const acceptedAddons = (est.addons||[]).filter(a=>a.accepted);
+  const addonTotal = acceptedAddons.reduce((s,a)=>(a.lineItems||[]).reduce((ss,li)=>ss+((li.rate||0)*(li.qty||1)),ss),0);
+  const grandTotal = baseTotal + addonTotal;
+  const estNum = 'EST-'+String(est.estimateNumber||'').padStart(4,'0');
+  const expiryLine = est.expiresAt ? `<p style="color:#666;font-size:13px">Valid until: ${new Date(est.expiresAt).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</p>` : '';
+
+  const lineItemsHtml = (est.lineItems||[]).map(li=>
+    `<tr><td style="padding:8px 0;border-bottom:1px solid #eee">${escHtml(li.desc)}</td><td style="text-align:center;padding:8px 4px;border-bottom:1px solid #eee">${li.qty}</td><td style="text-align:right;padding:8px 0;border-bottom:1px solid #eee">$${(li.rate||0).toFixed(2)}</td><td style="text-align:right;padding:8px 0;border-bottom:1px solid #eee">$${((li.qty||1)*(li.rate||0)).toFixed(2)}</td></tr>`
+  ).join('');
+
+  const addonsHtml = (est.addons||[]).map(a => {
+    const aTotal = (a.lineItems||[]).reduce((s,li)=>s+((li.rate||0)*(li.qty||1)),0);
+    const aItems = (a.lineItems||[]).map(li=>
+      `<tr><td style="padding:6px 0 6px 16px;border-bottom:1px solid #f0f0f0;color:#555">${escHtml(li.desc)}</td><td style="text-align:center;padding:6px 4px;border-bottom:1px solid #f0f0f0;color:#555">${li.qty}</td><td style="text-align:right;padding:6px 0;border-bottom:1px solid #f0f0f0;color:#555">$${(li.rate||0).toFixed(2)}</td><td style="text-align:right;padding:6px 0;border-bottom:1px solid #f0f0f0;color:#555">$${((li.qty||1)*(li.rate||0)).toFixed(2)}</td></tr>`
+    ).join('');
+    return `<tr><td colspan="3" style="padding:10px 0 4px;font-weight:700;color:#BE2625">${escHtml(a.name)} <span style="font-weight:400;font-size:12px;color:#888">(Optional Add-On${a.accepted?' — ACCEPTED':''})</span></td><td style="text-align:right;padding:10px 0 4px;font-weight:700">$${aTotal.toFixed(2)}</td></tr>${aItems}`;
+  }).join('');
+
+  const win = window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head><title>${estNum} — ${custName}</title>
+  <style>
+    body{font-family:Arial,sans-serif;max-width:680px;margin:40px auto;color:#1a1a1a;font-size:14px}
+    h1{font-size:24px;margin:0} .red{color:#BE2625} .sub{color:#666;font-size:13px}
+    table{width:100%;border-collapse:collapse} th{text-align:left;padding:8px 0;border-bottom:2px solid #BE2625;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#666}
+    th:not(:first-child){text-align:right} .total-row td{font-weight:700;font-size:15px;padding-top:12px}
+    .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #BE2625}
+    .footer{margin-top:32px;padding-top:16px;border-top:1px solid #eee;font-size:12px;color:#888;text-align:center}
+    @media print{body{margin:20px}}
+  </style></head><body>
+  <div class="header">
+    <div><h1 class="red">Tom Falk</h1><div class="sub">Plumbing | Heating | Cooling | Est. 1961</div><div class="sub">tomfalkph.com</div></div>
+    <div style="text-align:right"><div style="font-size:20px;font-weight:700">${estNum}</div><div class="sub">Date: ${new Date(est.createdAt||Date.now()).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</div>${expiryLine}</div>
+  </div>
+  <div style="margin-bottom:20px"><div style="font-weight:700;font-size:16px">${escHtml(custName)}</div>${est.address?`<div class="sub">${escHtml(est.address)}</div>`:''}</div>
+  ${est.notes?`<div style="background:#f8f8f8;border-left:3px solid #BE2625;padding:10px 14px;margin-bottom:20px;font-size:13px">${escHtml(est.notes)}</div>`:''}
+  <table>
+    <thead><tr><th>Description</th><th style="text-align:center">Qty</th><th style="text-align:right">Rate</th><th style="text-align:right">Total</th></tr></thead>
+    <tbody>
+      ${lineItemsHtml}
+      <tr><td colspan="3" style="padding-top:8px;font-weight:600;text-align:right">Base Total</td><td style="text-align:right;padding-top:8px;font-weight:700">$${baseTotal.toFixed(2)}</td></tr>
+      ${addonsHtml ? `<tr><td colspan="4" style="padding-top:16px;padding-bottom:4px;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#888">Optional Add-Ons</td></tr>${addonsHtml}` : ''}
+      <tr class="total-row"><td colspan="3" style="text-align:right;padding-top:16px;border-top:2px solid #BE2625">ESTIMATE TOTAL</td><td style="text-align:right;padding-top:16px;border-top:2px solid #BE2625;color:#BE2625;font-size:18px">$${grandTotal.toFixed(2)}</td></tr>
+    </tbody>
+  </table>
+  <div class="footer">Prices are estimates based on current scope. Final invoice may vary based on conditions found on site.<br>This estimate is valid for 30 days from the date above unless otherwise noted.</div>
+  </body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(()=>win.print(), 400);
+}
+
+// ── Copy estimate summary to clipboard + mark as Sent
+async function shareEstimate(id) {
+  const est = state.estimates.find(e=>e.id===id);
+  if (!est) return;
+  const cust = state.customers.find(c=>c.id===est.customerId);
+  const custName = cust ? cust.name : (est.customerName||'');
+  const total = calcEstimateTotal(est);
+  const estNum = 'EST-'+String(est.estimateNumber||'').padStart(4,'0');
+  const expiry = est.expiresAt ? `\nValid until: ${new Date(est.expiresAt).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}` : '';
+  const addons = (est.addons||[]).map(a=>`  • ${a.name} (optional add-on)`).join('\n');
+  const text = `Tom Falk Plumbing & Heating — Estimate\n${estNum} for ${custName}\n${est.address||''}\n\n${est.notes||''}\n${addons ? '\nOptional Add-Ons:\n'+addons+'\n' : ''}\nEstimate Total: $${total.toFixed(2)}${expiry}\n\nQuestions? Call us at your convenience.`;
+  try {
+    await navigator.clipboard.writeText(text);
+    // Mark as Sent if still draft
+    if ((est.status||'draft') === 'draft') {
+      est.status = 'sent';
+      est.sentAt = Date.now();
+      est.history.push({ action:'sent', at:Date.now(), by:currentUser?.username||'admin' });
+      await saveOneEstimate(est);
+      if (currentView === 'estimate-detail') renderEstimateDetail();
+      if (currentView === 'finance') renderFinance();
+    }
+    showToast('Estimate summary copied — marked as Sent', 'success');
+  } catch(e) {
+    prompt('Copy this estimate summary:', text);
+  }
+}
+
+
+function renderEstimateTemplates() {
+  const tpls = state.estimateTemplates || [];
+  document.getElementById('est-templates-list').innerHTML = tpls.length
+    ? tpls.map((t,i) => {
+        const liCount = (t.lineItems||[]).length;
+        const adCount = (t.addons||[]).length;
+        return `<div class="card" style="margin-bottom:8px">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div>
+              <div style="font-size:14px;font-weight:700">${escHtml(t.name)}</div>
+              <div style="font-size:12px;color:var(--text3)">${liCount} line item${liCount!==1?'s':''} · ${adCount} add-on${adCount!==1?'s':''}</div>
+            </div>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-ghost btn-sm" onclick="editEstimateTemplate(${i})">Edit</button>
+              <button class="btn btn-ghost btn-sm" style="color:var(--red-l)" onclick="deleteEstimateTemplate(${i})">Delete</button>
+            </div>
+          </div>
+        </div>`;
+      }).join('')
+    : '<div style="font-size:13px;color:var(--text3);margin-bottom:12px">No templates yet.</div>';
+}
+function openNewEstimateTemplate() {
+  // Reuse the estimate modal but save as template
+  openNewEstimate();
+  document.getElementById('modal-estimate-title').textContent = 'New Estimate Template';
+  document.getElementById('est-customer-id').closest('.form-group').style.display = 'none';
+  document.getElementById('est-address').closest('.form-group').style.display = 'none';
+  document.getElementById('est-expires').closest('.form-group').style.display = 'none';
+  document.getElementById('est-template-row').style.display = 'none';
+  document.getElementById('est-edit-id').value = '__template__';
+  window._estTemplateName = prompt('Template name?') || 'Unnamed Template';
+  if (!window._estTemplateName || window._estTemplateName === 'null') {
+    closeModal('modal-estimate'); return;
+  }
+}
+function editEstimateTemplate(i) {
+  const tpl = (state.estimateTemplates||[])[i];
+  if (!tpl) return;
+  window._estLineItems = JSON.parse(JSON.stringify(tpl.lineItems||[]));
+  window._estAddons    = JSON.parse(JSON.stringify(tpl.addons||[]));
+  openNewEstimate();
+  document.getElementById('modal-estimate-title').textContent = 'Edit Template: ' + tpl.name;
+  document.getElementById('est-customer-id').closest('.form-group').style.display = 'none';
+  document.getElementById('est-address').closest('.form-group').style.display = 'none';
+  document.getElementById('est-expires').closest('.form-group').style.display = 'none';
+  document.getElementById('est-template-row').style.display = 'none';
+  document.getElementById('est-edit-id').value = '__template__:' + i;
+  document.getElementById('est-notes').value = tpl.notes || '';
+  renderEstLineItems();
+  renderEstAddons();
+}
+async function deleteEstimateTemplate(i) {
+  if (!confirm('Delete this template?')) return;
+  state.estimateTemplates.splice(i,1);
+  await saveEstimateTemplates();
+  renderEstimateTemplates();
+}
+
+
+function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function openEstimateTemplateManager() {
+  renderEstimateTemplates();
+  renderAddonLibraryManager();
+  openModal('modal-est-templates');
+}
+
+function renderAddonLibraryManager() {
+  // Inline in the template modal — show addon library below templates
+  const lib = state.addonPackages || [];
+  const libHtml = lib.length
+    ? lib.map((pkg,i) => {
+        const aTotal = (pkg.lineItems||[]).reduce((s,li)=>s+((li.rate||0)*(li.qty||1)),0);
+        return `<div class="card" style="margin-bottom:8px">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div>
+              <div style="font-size:14px;font-weight:700">${escHtml(pkg.name)}</div>
+              <div style="font-size:12px;color:var(--text3)">${pkg.desc||''} · ${fmtMoney(aTotal)}</div>
+            </div>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-ghost btn-sm" onclick="editLibraryAddon(${i})">Edit</button>
+              <button class="btn btn-ghost btn-sm" style="color:var(--red-l)" onclick="deleteLibraryAddon(${i})">×</button>
+            </div>
+          </div>
+        </div>`;
+      }).join('')
+    : '<div style="font-size:13px;color:var(--text3);margin-bottom:8px">No packages in library yet.</div>';
+
+  const existing = document.getElementById('addon-lib-manager');
+  const html = `<div id="addon-lib-manager" style="margin-top:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div style="font-size:14px;font-weight:700;color:var(--text)">Add-On Package Library</div>
+      <button class="btn btn-ghost btn-sm" onclick="openNewLibraryAddon()">+ New Package</button>
+    </div>
+    ${libHtml}
+  </div>`;
+  if (existing) existing.outerHTML = html;
+  else document.getElementById('est-templates-list').insertAdjacentHTML('afterend', html);
+}
+
+function openNewLibraryAddon() {
+  estAddonEditIndex = '__library_new__';
+  document.getElementById('modal-addon-title').textContent = 'New Library Package';
+  document.getElementById('addon-name').value = '';
+  document.getElementById('addon-desc').value = '';
+  window._addonLineItems = [];
+  renderAddonLineItems();
+  openModal('modal-addon');
+}
+function editLibraryAddon(i) {
+  estAddonEditIndex = '__library__:' + i;
+  const pkg = (state.addonPackages||[])[i];
+  if (!pkg) return;
+  document.getElementById('modal-addon-title').textContent = 'Edit Library Package';
+  document.getElementById('addon-name').value = pkg.name || '';
+  document.getElementById('addon-desc').value = pkg.desc || '';
+  window._addonLineItems = JSON.parse(JSON.stringify(pkg.lineItems||[]));
+  renderAddonLineItems();
+  openModal('modal-addon');
+}
+async function deleteLibraryAddon(i) {
+  if (!confirm('Remove from library?')) return;
+  state.addonPackages.splice(i,1);
+  await saveAddonPackages();
+  renderAddonLibraryManager();
+}
+
+
+
+
 async function generateStripePaymentLink(jobId) {
   const job = state.jobs.find(j => j.id === jobId);
   if (!job || job.status === 'estimate') return null;
@@ -5826,14 +7018,92 @@ async function sendProgrammatic() {
   }
 }
 
-function printInvoice() {
-  window.print();
-  if (currentInvoiceJobId) {
-    const job = state.jobs.find(j => j.id === currentInvoiceJobId) || state.archivedJobs.find(j => j.id === currentInvoiceJobId);
-    if (job && job.invoiceStatus === 'draft') {
-      setInvoiceStatus(currentInvoiceJobId, 'sent');
-    }
-  }
+function printInvoice(jobId) {
+  const id = jobId || currentInvoiceJobId;
+  const job = state.jobs.find(j => j.id === id) || state.archivedJobs.find(j => j.id === id);
+  if (!job) return;
+  const cust = state.customers.find(c => c.id === job.customerId);
+  const custName = cust ? cust.name : (job.customerName || 'Unknown');
+  const lines = getInvoiceLines(job);
+  const laborLines = lines.filter(l => l.type === 'labor');
+  const matLines = lines.filter(l => l.type === 'material');
+  const feeLines = lines.filter(l => l.type === 'fee' || (!l.type));
+  const laborTotal = laborLines.reduce((s,l) => s + (parseFloat(l.total)||0), 0);
+  const matTotal = matLines.reduce((s,l) => s + (parseFloat(l.total)||0), 0);
+  const feeTotal = feeLines.reduce((s,l) => s + (parseFloat(l.total)||0), 0);
+  const grandTotal = laborTotal + matTotal + feeTotal;
+  const totalPaid = getTotalPaid(job);
+  const balanceDue = grandTotal - totalPaid;
+  const invNum = job.invoiceNumber || 'INV-' + String(job.jobNumber).padStart(4,'0');
+  const invDate = job.invoiceDate || today();
+
+  const laborRowsHtml = laborLines.map(l =>
+    `<tr><td style="padding:8px 0;border-bottom:1px solid #eee">${escHtml(l.description)}${l.detail ? `<div style="font-size:11px;color:#888;margin-top:2px">${l.detail}</div>` : ''}</td><td style="text-align:right;padding:8px 0;border-bottom:1px solid #eee;font-weight:600">$${(parseFloat(l.total)||0).toFixed(2)}</td></tr>`
+  ).join('');
+
+  const matRowsHtml = matLines.map(l =>
+    `<tr><td style="padding:8px 0;border-bottom:1px solid #eee;padding-left:8px;color:#555">${escHtml(l.description)}${l.qty > 1 ? ` <span style="color:#888;font-size:12px">x${l.qty}</span>` : ''}</td><td style="text-align:right;padding:8px 0;border-bottom:1px solid #eee;color:#555">$${(parseFloat(l.total)||0).toFixed(2)}</td></tr>`
+  ).join('');
+
+  const feeRowsHtml = feeLines.map(l =>
+    `<tr><td style="padding:8px 0;border-bottom:1px solid #eee">${escHtml(l.description)}</td><td style="text-align:right;padding:8px 0;border-bottom:1px solid #eee">$${(parseFloat(l.total)||0).toFixed(2)}</td></tr>`
+  ).join('');
+
+  const paymentsHtml = (job.payments && job.payments.filter(p => !p.refunded).length) ? `
+    <div style="margin-top:16px;padding-top:12px;border-top:1px solid #eee">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#888;margin-bottom:8px">Payments Received</div>
+      <table style="width:100%;border-collapse:collapse">
+        ${job.payments.filter(p => !p.refunded).map(p =>
+          `<tr><td style="padding:4px 0;font-size:13px;color:#555">${p.depositDate ? fmtDate(p.depositDate) : 'On file'} — ${p.method}</td><td style="text-align:right;font-size:13px;color:#555">$${(p.amount||0).toFixed(2)}</td></tr>`
+        ).join('')}
+      </table>
+    </div>` : '';
+
+  const win = window.open('', '_blank');
+  win.document.write(`<!DOCTYPE html><html><head><title>${invNum} — ${custName}</title>
+  <style>
+    body{font-family:Arial,sans-serif;max-width:680px;margin:40px auto;color:#1a1a1a;font-size:14px}
+    h1{font-size:24px;margin:0} .red{color:#BE2625} .sub{color:#666;font-size:13px}
+    table{width:100%;border-collapse:collapse}
+    th{text-align:left;padding:8px 0;border-bottom:2px solid #BE2625;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#666}
+    th.right{text-align:right}
+    .section-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#888;margin:16px 0 6px}
+    .total-row td{font-weight:700;font-size:15px;padding-top:12px}
+    .balance-row td{font-weight:700;font-size:17px;padding-top:10px;color:#BE2625;border-top:2px solid #BE2625}
+    .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid #BE2625}
+    .footer{margin-top:32px;padding-top:16px;border-top:1px solid #eee;font-size:12px;color:#888;text-align:center}
+    @media print{body{margin:20px}}
+  </style></head><body>
+  <div class="header">
+    <div><h1 class="red">Tom Falk</h1><div class="sub">Plumbing | Heating | Cooling | Est. 1961</div><div class="sub">tomfalkph.com</div></div>
+    <div style="text-align:right">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#888">Invoice</div>
+      <div style="font-size:20px;font-weight:700">${invNum}</div>
+      <div class="sub">Date: ${new Date(invDate+'T00:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</div>
+    </div>
+  </div>
+  <div style="margin-bottom:20px">
+    <div style="font-weight:700;font-size:16px">${escHtml(custName)}</div>
+    ${cust?.address ? `<div class="sub">${escHtml(cust.address)}</div>` : ''}
+    ${cust?.phone ? `<div class="sub">${escHtml(cust.phone)}</div>` : ''}
+  </div>
+  ${job.description ? `<div style="background:#f8f8f8;border-left:3px solid #BE2625;padding:10px 14px;margin-bottom:20px;font-size:13px">${escHtml(job.description)}</div>` : ''}
+  <table>
+    <thead><tr><th>Description</th><th class="right">Amount</th></tr></thead>
+    <tbody>
+      ${laborTotal > 0 ? `<tr><td colspan="2" style="padding-top:8px"><div class="section-label">Services</div></td></tr>${laborRowsHtml}` : ''}
+      ${matLines.length ? `<tr><td colspan="2"><div class="section-label">Materials &amp; Parts</div></td></tr>${matRowsHtml}` : ''}
+      ${feeLines.length ? `<tr><td colspan="2"><div class="section-label">Other Charges</div></td></tr>${feeRowsHtml}` : ''}
+      <tr class="total-row"><td style="text-align:right;padding-top:16px;border-top:1px solid #ddd">Total</td><td style="text-align:right;padding-top:16px;border-top:1px solid #ddd">$${grandTotal.toFixed(2)}</td></tr>
+      ${paymentsHtml ? `<tr><td colspan="2">${paymentsHtml}</td></tr>` : ''}
+      <tr class="balance-row"><td style="text-align:right;padding-top:10px">Balance Due</td><td style="text-align:right;padding-top:10px">$${Math.max(balanceDue,0).toFixed(2)}</td></tr>
+    </tbody>
+  </table>
+  <div class="footer">Thank you for your business! Questions? Call us or visit tomfalkph.com</div>
+  </body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 400);
 }
 
 // ──────────────────────────────────────────────────────────
@@ -6187,6 +7457,111 @@ function renderReporting() {
       </div>
       <div style="font-size:11px;color:var(--text3)">Labor cost basis: $${LABOR_COST}/hr · Includes invoiced + paid + closed jobs</div>
     </div>
+
+    <!-- ESTIMATES PIPELINE -->
+    ${(() => {
+      const ests = state.estimates || [];
+      const open = ests.filter(e => !['converted','declined','expired'].includes(e.status||'draft'));
+      const byStatus = { draft: 0, sent: 0, accepted: 0 };
+      const byStatusVal = { draft: 0, sent: 0, accepted: 0 };
+      open.forEach(e => {
+        const s = e.status || 'draft';
+        if (byStatus[s] !== undefined) {
+          byStatus[s]++;
+          byStatusVal[s] += calcEstimateTotal(e);
+        }
+      });
+      const totalEligible = ests.filter(e => !['declined','expired'].includes(e.status||'draft')).length;
+      const acceptedCount = ests.filter(e => e.status === 'accepted' || e.status === 'converted').length;
+      const convRate = totalEligible > 0 ? (acceptedCount / totalEligible * 100) : 0;
+      const avgVal = ests.length > 0 ? ests.reduce((s,e) => s + calcEstimateTotal(e), 0) / ests.length : 0;
+      const pipeTotal = open.reduce((s,e) => s + calcEstimateTotal(e), 0);
+
+      // Monthly trend — last 6 months
+      const months = [];
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i);
+        const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+        const label = d.toLocaleDateString('en-US', { month:'short', year:'2-digit' });
+        months.push({ key, label, created:0, accepted:0, converted:0, value:0 });
+      }
+      ests.forEach(e => {
+        const d = new Date(e.createdAt || Date.now());
+        const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+        const m = months.find(x => x.key === key);
+        if (!m) return;
+        m.created++;
+        m.value += calcEstimateTotal(e);
+        if (e.status === 'accepted') m.accepted++;
+        if (e.status === 'converted') { m.accepted++; m.converted++; }
+      });
+
+      const statusColors2 = { draft:'var(--text3)', sent:'var(--blue)', accepted:'var(--green)' };
+      const statusLabels2 = { draft:'Draft', sent:'Sent', accepted:'Accepted' };
+
+      return `<div class="card" style="margin-bottom:14px">
+        <div class="detail-section-title" style="margin-bottom:12px">Estimates Pipeline</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
+          <div style="background:var(--surface2);border-radius:10px;padding:10px;text-align:center">
+            <div style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Pipeline</div>
+            <div style="font-size:18px;font-weight:700;color:var(--blue)">${fmtMoney(pipeTotal)}</div>
+            <div style="font-size:11px;color:var(--text3)">${open.length} open</div>
+          </div>
+          <div style="background:var(--surface2);border-radius:10px;padding:10px;text-align:center">
+            <div style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Conv. Rate</div>
+            <div style="font-size:18px;font-weight:700;color:${convRate >= 50 ? 'var(--green)' : convRate >= 25 ? '#f59e0b' : 'var(--text)'}">${convRate.toFixed(0)}%</div>
+            <div style="font-size:11px;color:var(--text3)">${acceptedCount}/${totalEligible}</div>
+          </div>
+          <div style="background:var(--surface2);border-radius:10px;padding:10px;text-align:center">
+            <div style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Avg Value</div>
+            <div style="font-size:18px;font-weight:700;color:var(--text)">${fmtMoney(avgVal)}</div>
+            <div style="font-size:11px;color:var(--text3)">${ests.length} total</div>
+          </div>
+        </div>
+        <div style="margin-bottom:12px">
+          ${['draft','sent','accepted'].map(s => {
+            const count = byStatus[s] || 0;
+            if (!count) return '';
+            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid var(--border);font-size:13px">
+              <span style="color:${statusColors2[s]};font-weight:600;text-transform:capitalize">${statusLabels2[s]}</span>
+              <span style="color:var(--text2)">${count} · ${fmtMoney(byStatusVal[s])}</span>
+            </div>`;
+          }).join('')}
+        </div>
+        <div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Monthly Trend (Last 6 Months)</div>
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead>
+              <tr style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">
+                <th style="text-align:left;padding:4px 6px 6px 0;font-weight:600">Month</th>
+                <th style="text-align:right;padding:4px 6px 6px;font-weight:600">Created</th>
+                <th style="text-align:right;padding:4px 6px 6px;font-weight:600">Accepted</th>
+                <th style="text-align:right;padding:4px 6px 6px;font-weight:600">Converted</th>
+                <th style="text-align:right;padding:4px 0 6px 6px;font-weight:600">Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${months.map(m => `<tr style="border-top:1px solid var(--border)">
+                <td style="padding:6px 6px 6px 0;color:var(--text2)">${m.label}</td>
+                <td style="padding:6px;text-align:right;color:var(--text2)">${m.created}</td>
+                <td style="padding:6px;text-align:right;color:${m.accepted?'var(--green)':'var(--text3)'}">${m.accepted}</td>
+                <td style="padding:6px;text-align:right;color:${m.converted?'var(--blue)':'var(--text3)'}">${m.converted}</td>
+                <td style="padding:6px 0 6px 6px;text-align:right;color:var(--text2)">${m.value ? fmtMoney(m.value) : '—'}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+    })()}
+
+    <!-- QB EXPORTS -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="detail-section-title" style="margin-bottom:10px">Exports</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-secondary btn-sm" onclick="exportQBJobRegister()">↓ QB Job Register</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportEstimatesCSV()">↓ Estimates CSV</button>
+      </div>
+    </div>
   `;
 }
 
@@ -6441,6 +7816,21 @@ function renderRecurring() {
 }
 
 function renderSettings(keepPage) {
+  // Techs see account-only view — no rates, no materials, no admin tools
+  if (isTech()) {
+    const settingsContent = document.querySelector('#view-settings > div');
+    if (settingsContent) {
+      settingsContent.innerHTML = `
+        <div style="padding-top:8px">
+          <div class="card" style="margin-bottom:20px">
+            <div class="card-title" style="margin-bottom:12px">Account</div>
+            <div id="settings-user-info" style="font-size:13px;color:var(--text2);margin-bottom:14px"></div>
+            <button class="btn btn-ghost" style="width:100%;color:var(--red-l);border-color:rgba(190,38,37,.3)" onclick="doLogout()">Sign Out</button>
+          </div>
+        </div>`;
+    }
+    return;
+  }
   const q = (document.getElementById('mat-search')?.value || '').toLowerCase();
   if (!keepPage) matPage = 1;
   const mats = state.materials.filter(m =>
