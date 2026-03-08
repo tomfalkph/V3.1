@@ -685,6 +685,12 @@ ul { list-style: none; }
       <div class="search-row">
         <input class="search-box" id="job-search" placeholder="Search jobs…" oninput="renderJobs()">
       </div>
+      <div id="job-quick-filters" style="display:flex;gap:6px;flex-wrap:wrap;padding:0 16px 10px">
+        <button class="job-qf" id="qf-today"       onclick="toggleJobFilter('today')"       style="font-size:12px;font-weight:600;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);cursor:pointer">Today</button>
+        <button class="job-qf" id="qf-week"        onclick="toggleJobFilter('week')"        style="font-size:12px;font-weight:600;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);cursor:pointer">This Week</button>
+        <button class="job-qf" id="qf-attention"   onclick="toggleJobFilter('attention')"   style="font-size:12px;font-weight:600;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);cursor:pointer">⚠ Needs Attention</button>
+        <button class="job-qf" id="qf-unscheduled" onclick="toggleJobFilter('unscheduled')" style="font-size:12px;font-weight:600;padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);cursor:pointer">Unscheduled</button>
+      </div>
       <div class="section-header">
         <span class="section-title" id="job-count">Jobs</span>
         <button class="add-btn" onclick="resetJobModal();openModal('modal-job')">
@@ -1821,6 +1827,11 @@ function canDeleteMaterial() { return !isTech(); }
 
 let currentView = 'dashboard';
 let currentJobTab = 'active';
+let activeJobFilter = null; // 'today' | 'week' | 'attention' | 'unscheduled' | null
+const PAGE_SIZE = 50;
+let custPage = 1;
+let jobPage  = 1;
+let matPage  = 1;
 let selectedJobCustomerId = null;
 let pendingJobCustomerCreate = false;
 let editingJobId = null;
@@ -1884,7 +1895,7 @@ async function load() {
       sb.from('jobs').select('id, data'),
       sb.from('meta').select('key, value').eq('key', 'nextId'),
       sb.from('meta').select('key, value').eq('key', 'pricebook'),
-      sb.from('meta').select('key, value').eq('key', 'materials'),
+      sb.from('materials').select('*').order('name'),
       sb.from('meta').select('key, value').eq('key', 'rates'),
       sb.from('meta').select('key, value').eq('key', 'techs'),
       sb.from('meta').select('key, value').eq('key', 'dismissedDupes'),
@@ -1904,11 +1915,16 @@ async function load() {
       state.pricebook = SEED_PRICEBOOK;
       await sb.from('meta').upsert({ key: 'pricebook', value: SEED_PRICEBOOK }, { onConflict: 'key' });
     }
-    if (matRes.data && matRes.data[0]) {
-      state.materials = matRes.data[0].value;
+    if (matRes.data && matRes.data.length) {
+      state.materials = matRes.data.map(m => ({ ...m, createdAt: m.created_at || m.createdAt || 0 }));
     } else {
       state.materials = seedMaterialsFromPricebook();
-      await sb.from('meta').upsert({ key: 'materials', value: state.materials }, { onConflict: 'key' });
+      for (const m of state.materials) {
+        await sb.from('materials').upsert({
+          id: m.id, name: m.name, description: m.description||'', sku: m.sku||'',
+          cost: m.cost, margin: m.margin, sell: m.sell, created_at: m.createdAt||Date.now()
+        }, { onConflict: 'id' });
+      }
     }
     if (ratesRes.data && ratesRes.data[0]) {
       const r = ratesRes.data[0].value;
@@ -2071,6 +2087,12 @@ function uid(prefix) {
 function fmtDate(d) {
   if (!d) return '—';
   return new Date(d).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+}
+function fmtDateTime(ts) {
+  if (!ts) return '—';
+  const d = new Date(ts);
+  return d.toLocaleDateString('en-US', { month:'short', day:'numeric' }) + ' ' +
+    d.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit', hour12:true });
 }
 function fmtTime(t) { return t || '—'; }
 function fmtMoney(n) {
@@ -2386,8 +2408,9 @@ function convertLeadToJob(leadId) {
 // ──────────────────────────────────────────────────────────
 // CUSTOMERS
 // ──────────────────────────────────────────────────────────
-function renderCustomers() {
+function renderCustomers(keepPage) {
   const q = (document.getElementById('cust-search')?.value || '').toLowerCase();
+  if (!keepPage) custPage = 1;
   let custs = state.customers.filter(c =>
     !q || c.name.toLowerCase().includes(q) || (c.address||'').toLowerCase().includes(q) || (c.phone||'').includes(q)
   );
@@ -2419,8 +2442,18 @@ function renderCustomers() {
     }
   }
 
-  document.getElementById('cust-list').innerHTML = custs.length
-    ? custs.map(c => custCard(c)).join('')
+  const custTotal = custs.length;
+  const custSlice = custs.slice(0, custPage * PAGE_SIZE);
+  const custHasMore = custSlice.length < custTotal;
+  document.getElementById('cust-list').innerHTML = custTotal
+    ? custSlice.map(c => custCard(c)).join('') +
+      (custHasMore
+        ? `<div style="text-align:center;padding:16px 0">
+            <button onclick="custPage++;renderCustomers(true)" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:8px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font)">
+              Load More <span style="color:var(--text3)">(${custTotal - custSlice.length} remaining)</span>
+            </button>
+           </div>`
+        : `<div style="text-align:center;padding:12px 0;font-size:12px;color:var(--text3)">${custTotal} customer${custTotal!==1?'s':''} total</div>`)
     : '<div class="empty-state"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2 20c0-4 3.1-7 7-7s7 3 7 7"/><circle cx="18" cy="9" r="3"/><path d="M22 20c0-3-1.8-5.5-4-6"/></svg><p>No customers yet.</p></div>';
 }
 
@@ -2838,8 +2871,22 @@ function setJobTab(tab, el) {
   renderJobs();
 }
 
-function renderJobs() {
+function toggleJobFilter(filter) {
+  activeJobFilter = activeJobFilter === filter ? null : filter;
+  document.querySelectorAll('.job-qf').forEach(btn => {
+    const isActive = btn.id === 'qf-' + activeJobFilter;
+    btn.style.background    = isActive ? 'var(--red)'    : 'var(--surface2)';
+    btn.style.color         = isActive ? '#fff'          : 'var(--text2)';
+    btn.style.borderColor   = isActive ? 'var(--red)'    : 'var(--border)';
+  });
+  renderJobs();
+}
+
+function renderJobs(keepPage) {
   const q = (document.getElementById('job-search')?.value || '').toLowerCase();
+  if (!keepPage) jobPage = 1;
+  const today = new Date().toISOString().slice(0, 10);
+  const weekEnd = new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   let jobs = state.jobs;
   if (isTech() && currentUser) {
     jobs = jobs.filter(j => (j.techs || []).includes(currentUser.username));
@@ -2847,6 +2894,17 @@ function renderJobs() {
   if (currentJobTab === 'active') jobs = jobs.filter(j => ['unscheduled','scheduled','active','completed'].includes(j.status));
   else if (currentJobTab === 'estimate') jobs = jobs.filter(j => j.status === 'estimate');
   else if (currentJobTab === 'closed') jobs = jobs.filter(j => ['invoiced','paid','closed'].includes(j.status));
+
+  // Quick filters — applied on top of tab
+  if (activeJobFilter === 'today') {
+    jobs = jobs.filter(j => j.scheduledDate === today);
+  } else if (activeJobFilter === 'week') {
+    jobs = jobs.filter(j => j.scheduledDate && j.scheduledDate >= today && j.scheduledDate <= weekEnd);
+  } else if (activeJobFilter === 'attention') {
+    jobs = jobs.filter(j => j.returnTrip || hasActiveClockIn(j) || j.status === 'completed');
+  } else if (activeJobFilter === 'unscheduled') {
+    jobs = jobs.filter(j => !j.scheduledDate && j.status === 'unscheduled');
+  }
 
   if (q) {
     const matchJob = j => {
@@ -2865,9 +2923,21 @@ function renderJobs() {
       if (archivedMatches.length) jobs = [...jobs, ...archivedMatches];
     }
   }
-  document.getElementById('job-count').textContent = jobs.length + ' Job' + (jobs.length !== 1 ? 's' : '');
-  document.getElementById('job-list').innerHTML = jobs.length
-    ? jobs.map(j => jobCard(j)).join('')
+  const jobTotal = jobs.length;
+  const jobSlice = jobs.slice(0, jobPage * PAGE_SIZE);
+  const jobHasMore = jobSlice.length < jobTotal;
+  document.getElementById('job-count').textContent = jobTotal + ' Job' + (jobTotal !== 1 ? 's' : '');
+  document.getElementById('job-list').innerHTML = jobTotal
+    ? jobSlice.map(j => jobCard(j)).join('') +
+      (jobHasMore
+        ? `<div style="text-align:center;padding:16px 0">
+            <button onclick="jobPage++;renderJobs(true)" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:8px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font)">
+              Load More <span style="color:var(--text3)">(${jobTotal - jobSlice.length} remaining)</span>
+            </button>
+           </div>`
+        : jobTotal > PAGE_SIZE
+          ? `<div style="text-align:center;padding:12px 0;font-size:12px;color:var(--text3)">${jobTotal} jobs total</div>`
+          : '')
     : '<div class="empty-state"><svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg><p>No jobs in this view.</p></div>';
 }
 
@@ -3273,6 +3343,65 @@ function renderJobDetail() {
       <div class="detail-section-title" style="margin-bottom:6px">Internal Notes</div>
       <div style="font-size:14px;color:var(--text2);white-space:pre-wrap">${job.notes}</div>
     </div>` : ''}
+
+    <!-- HISTORY -->
+    ${(() => {
+      const history = (job.history || []);
+      if (!history.length) return '';
+      const sorted = [...history].sort((a, b) => b.at - a.at);
+      function histLabel(e) {
+        const statusLabels = {
+          unscheduled: 'Unscheduled', scheduled: 'Scheduled', active: 'Active',
+          completed: 'Completed', invoiced: 'Invoiced', paid: 'Paid',
+          closed: 'Closed', estimate: 'Estimate'
+        };
+        switch (e.action) {
+          case 'status_change':  return `Status → ${statusLabels[e.to] || e.to}${e.method ? ` (${e.method}${e.ref ? ' · ' + e.ref : ''})` : ''}`;
+          case 'status_override': return `Status overridden → ${statusLabels[e.to] || e.to}`;
+          case 'clock_in':       return `${e.tech} clocked in`;
+          case 'clock_out':      return `${e.tech} clocked out`;
+          case 'line_item_added': return `Line item added: ${e.desc || ''}`;
+          case 'pricebook_added': return `Pricebook item added: ${e.name || ''}`;
+          case 'edited':         return 'Job details edited';
+          default:               return e.action;
+        }
+      }
+      function histIcon(e) {
+        switch (e.action) {
+          case 'status_change':
+          case 'status_override': return '◆';
+          case 'clock_in':        return '▶';
+          case 'clock_out':       return '■';
+          case 'line_item_added':
+          case 'pricebook_added': return '+';
+          case 'edited':          return '✎';
+          default:                return '·';
+        }
+      }
+      function histColor(e) {
+        switch (e.action) {
+          case 'status_change':
+          case 'status_override': return 'var(--blue)';
+          case 'clock_in':        return 'var(--green)';
+          case 'clock_out':       return 'var(--text3)';
+          case 'line_item_added':
+          case 'pricebook_added': return 'var(--yellow)';
+          case 'edited':          return 'var(--text3)';
+          default:                return 'var(--text3)';
+        }
+      }
+      const rows = sorted.map(e => `
+        <div style="display:flex;align-items:flex-start;gap:10px;padding:7px 0;border-top:1px solid var(--border)">
+          <span style="color:${histColor(e)};font-size:11px;width:12px;flex-shrink:0;padding-top:2px;text-align:center">${histIcon(e)}</span>
+          <span style="flex:1;font-size:13px;color:var(--text2)">${histLabel(e)}</span>
+          <span style="font-size:11px;color:var(--text3);white-space:nowrap;flex-shrink:0">${fmtDateTime(e.at)}</span>
+        </div>
+      `).join('');
+      return `<div class="card" style="margin-bottom:10px">
+        <div class="detail-section-title" style="margin-bottom:6px">Activity (${history.length})</div>
+        ${rows}
+      </div>`;
+    })()}
 
     <!-- ACTIONS -->
     <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
@@ -3727,20 +3856,21 @@ function saveLineItem() {
       // New item — save to master list
       const calcMargin = margin || getMatMarginPct(cost);
       const calcSell = rate || cost / (1 - calcMargin/100);
-      state.materials.push({
+      const newMat = {
         id: 'mat_' + Math.random().toString(36).slice(2,9),
         name: desc, description: '', sku, cost,
         margin: calcMargin, sell: calcSell,
         createdAt: Date.now()
-      });
-      saveMaterialsToMeta();
+      };
+      state.materials.push(newMat);
+      saveOneMaterial(newMat);
     } else if (matId) {
       // Existing item — check if cost/rate changed, prompt update
       const m = state.materials.find(x => x.id === matId);
       if (m && (Math.abs(m.cost - cost) > 0.01 || Math.abs(m.sell - rate) > 0.01)) {
         if (confirm(`Update master list price for "${desc}"?\nNew cost: ${fmtMoney(cost)} · sell: ${fmtMoney(rate)}`)) {
           m.cost = cost; m.sell = rate; m.margin = margin || getMatMarginPct(cost);
-          saveMaterialsToMeta();
+          saveOneMaterial(m);
         }
       }
     }
@@ -4516,13 +4646,8 @@ function sendMailto() {
   if (!email) { alert('Email required'); return; }
   const jobId = document.getElementById('send-job-id').value;
   window.open(`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(email)}&su=${subject}&body=${body}`, '_blank');
+  setInvoiceStatus(jobId, 'sent');
   closeModal('modal-invoice-send');
-  // Delay prompt so modal close animation doesn't block
-  setTimeout(() => {
-    if (confirm('Mark this invoice as Sent?\n\nOnly confirm after you have sent the email in Gmail.')) {
-      setInvoiceStatus(jobId, 'sent');
-    }
-  }, 400);
 }
 
 async function sendProgrammatic() {
@@ -4552,6 +4677,12 @@ async function sendProgrammatic() {
 
 function printInvoice() {
   window.print();
+  if (currentInvoiceJobId) {
+    const job = state.jobs.find(j => j.id === currentInvoiceJobId) || state.archivedJobs.find(j => j.id === currentInvoiceJobId);
+    if (job && job.invoiceStatus === 'draft') {
+      setInvoiceStatus(currentInvoiceJobId, 'sent');
+    }
+  }
 }
 
 // ──────────────────────────────────────────────────────────
@@ -4676,23 +4807,36 @@ async function savePricebookToMeta() {
   localBackup();
 }
 
-async function saveMaterialsToMeta() {
+async function saveOneMaterial(m) {
   try {
-    await sb.from('meta').upsert({ key: 'materials', value: state.materials }, { onConflict: 'key' });
-  } catch(e) { console.error('saveMaterialsToMeta error', e); }
+    await sb.from('materials').upsert({
+      id: m.id, name: m.name, description: m.description||'', sku: m.sku||'',
+      cost: m.cost, margin: m.margin, sell: m.sell, created_at: m.createdAt||Date.now()
+    }, { onConflict: 'id' });
+  } catch(e) { console.error('saveOneMaterial error', e); }
   localBackup();
 }
 
-function renderSettings() {
+async function deleteMaterialFromTable(id) {
+  try {
+    await sb.from('materials').delete().eq('id', id);
+  } catch(e) { console.error('deleteMaterialFromTable error', e); }
+}
+
+function renderSettings(keepPage) {
   const q = (document.getElementById('mat-search')?.value || '').toLowerCase();
+  if (!keepPage) matPage = 1;
   const mats = state.materials.filter(m =>
     !q || m.name.toLowerCase().includes(q) ||
     (m.sku || '').toLowerCase().includes(q) ||
     (m.description || '').toLowerCase().includes(q)
   ).sort((a,b) => a.name.localeCompare(b.name));
   document.getElementById('mat-count').textContent = mats.length + ' Material' + (mats.length !== 1 ? 's' : '');
-  document.getElementById('mat-list').innerHTML = mats.length
-    ? mats.map(m => `
+  const matTotal = mats.length;
+  const matSlice = mats.slice(0, matPage * PAGE_SIZE);
+  const matHasMore = matSlice.length < matTotal;
+  document.getElementById('mat-list').innerHTML = matTotal
+    ? matSlice.map(m => `
         <div class="card" style="margin-bottom:8px">
           <div class="card-header">
             <div>
@@ -4709,7 +4853,16 @@ function renderSettings() {
             ${canDeleteMaterial() ? `<button class="btn btn-sm btn-ghost" style="color:var(--red-l)" onclick="deleteMaterial('${m.id}')">Delete</button>` : ''}
           </div>
         </div>`)
-      .join('')
+      .join('') +
+      (matHasMore
+        ? `<div style="text-align:center;padding:16px 0">
+            <button onclick="matPage++;renderSettings(true)" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:8px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font)">
+              Load More <span style="color:var(--text3)">(${matTotal - matSlice.length} remaining)</span>
+            </button>
+           </div>`
+        : matTotal > PAGE_SIZE
+          ? `<div style="text-align:center;padding:12px 0;font-size:12px;color:var(--text3)">${matTotal} materials total</div>`
+          : '')
     : '<div class="empty-state"><p>No materials yet. Add one above.</p></div>';
 }
 
@@ -4746,20 +4899,22 @@ function saveMaterial() {
   const cost = parseFloat(document.getElementById('mat-cost').value) || 0;
   const margin = parseFloat(document.getElementById('mat-margin').value) || getMatMarginPct(cost);
   const sell = parseFloat(document.getElementById('mat-sell').value) || (cost > 0 ? cost / (1 - margin/100) : 0);
+  let savedMat;
   if (editId) {
     const m = state.materials.find(x => x.id === editId);
-    if (m) { m.name = name; m.description = document.getElementById('mat-desc').value.trim(); m.sku = document.getElementById('mat-sku').value.trim(); m.cost = cost; m.margin = margin; m.sell = sell; }
+    if (m) { m.name = name; m.description = document.getElementById('mat-desc').value.trim(); m.sku = document.getElementById('mat-sku').value.trim(); m.cost = cost; m.margin = margin; m.sell = sell; savedMat = m; }
   } else {
-    state.materials.push({
+    savedMat = {
       id: 'mat_' + Math.random().toString(36).slice(2,9),
       name,
       description: document.getElementById('mat-desc').value.trim(),
       sku: document.getElementById('mat-sku').value.trim(),
       cost, margin, sell,
       createdAt: Date.now()
-    });
+    };
+    state.materials.push(savedMat);
   }
-  saveMaterialsToMeta();
+  if (savedMat) saveOneMaterial(savedMat);
   closeModal('modal-material');
   if (currentView === 'settings') renderSettings();
 }
@@ -4767,7 +4922,7 @@ function saveMaterial() {
 function deleteMaterial(id) {
   if (!confirm('Delete this material from the master list?')) return;
   state.materials = state.materials.filter(m => m.id !== id);
-  saveMaterialsToMeta();
+  deleteMaterialFromTable(id);
   renderSettings();
 }
 
@@ -5370,45 +5525,21 @@ function handleCsvImport(event) {
 
         if (!name) { errors.push(`Row ${i+2}: missing name — skipped`); return; }
 
-        // Normalize phone to digits only for comparison
-        const phoneDigits = phone.replace(/\D/g, '');
+        const exists = (state.customers || []).find(c =>
+          c.name.toLowerCase() === name.toLowerCase() &&
+          (c.phone === phone || (!c.phone && !phone))
+        );
 
-        // Exact match: same normalized name AND same normalized phone
-        const exactMatch = (state.customers || []).find(c => {
-          const cPhone = (c.phone || '').replace(/\D/g, '');
-          const stripped = (d) => d.replace(/^1/, '');
-          return c.name.toLowerCase() === name.toLowerCase() &&
-            phoneDigits && cPhone && stripped(phoneDigits) === stripped(cPhone);
-        });
-
-        // Fuzzy match: same normalized phone (leading-1 tolerant) OR name contains
-        const fuzzyMatch = !exactMatch && (state.customers || []).find(c => {
-          const cPhone = (c.phone || '').replace(/\D/g, '');
-          const stripped = (d) => d.replace(/^1/, '');
-          const phoneMatch = phoneDigits.length >= 10 && cPhone.length >= 10 &&
-            stripped(phoneDigits) === stripped(cPhone);
-          const cName = c.name.toLowerCase();
-          const rName = name.toLowerCase();
-          const nameContains = cName.includes(rName) || rName.includes(cName);
-          return phoneMatch || nameContains;
-        });
-
-        const matchState = exactMatch ? 'exact' : fuzzyMatch ? 'fuzzy' : 'new';
-        const matchName  = exactMatch ? exactMatch.name : fuzzyMatch ? fuzzyMatch.name : null;
-
-        csvImportRows.push({ name, phone, email, address, billing, notes, maintenancePlan,
-          exists: matchState === 'exact', fuzzy: matchState === 'fuzzy', matchName });
-        preview.push({ name, phone, email, address, matchState, matchName });
+        csvImportRows.push({ name, phone, email, address, billing, notes, maintenancePlan, exists: !!exists });
+        preview.push({ name, phone, email, address, exists: !!exists });
       });
 
-      const newCount  = preview.filter(r => r.matchState === 'new').length;
-      const skipCount = preview.filter(r => r.matchState === 'exact').length;
-      const warnCount = preview.filter(r => r.matchState === 'fuzzy').length;
+      const newCount = preview.filter(r => !r.exists).length;
+      const skipCount = preview.filter(r => r.exists).length;
 
       document.getElementById('csv-import-status').innerHTML = `
         <span style="color:var(--green)">${newCount} new</span> &nbsp;·&nbsp;
-        <span style="color:var(--text3)">${skipCount} exact duplicate (will skip)</span>
-        ${warnCount ? `&nbsp;·&nbsp;<span style="color:var(--yellow)">${warnCount} possible match (will import — review below)</span>` : ''}
+        <span style="color:var(--text3)">${skipCount} already exist (will skip)</span>
         ${errors.length ? `<br><span style="color:var(--red-l)">${errors.join('<br>')}</span>` : ''}
       `;
 
@@ -5424,13 +5555,10 @@ function handleCsvImport(event) {
           <tbody>
             ${preview.map(r => `
               <tr style="border-top:1px solid var(--border)">
-                <td style="padding:6px;color:${r.matchState==='exact'?'var(--text3)':'var(--text)'}">${r.name}</td>
+                <td style="padding:6px;color:${r.exists?'var(--text3)':'var(--text)'}">${r.name}</td>
                 <td style="padding:6px;color:var(--text2)">${r.phone||'—'}</td>
-                <td style="padding:6px">${
-                  r.matchState === 'exact'
-                    ? '<span style="color:var(--text3);font-size:11px">Skip</span>'
-                  : r.matchState === 'fuzzy'
-                    ? `<span style="color:var(--yellow);font-size:11px;font-weight:600">&#9888; Possible match: ${r.matchName}</span>`
+                <td style="padding:6px">${r.exists
+                  ? '<span style="color:var(--text3);font-size:11px">Skip</span>'
                   : '<span style="color:var(--green);font-size:11px;font-weight:600">New</span>'
                 }</td>
               </tr>
@@ -5440,9 +5568,8 @@ function handleCsvImport(event) {
       ` : '<div style="color:var(--text3);font-size:13px">No valid rows found.</div>';
 
       const confirmBtn = document.getElementById('csv-import-confirm-btn');
-      const importableCount = newCount + warnCount;
-      confirmBtn.style.display = importableCount > 0 ? 'inline-flex' : 'none';
-      confirmBtn.textContent = `Import ${importableCount} Customer${importableCount !== 1 ? 's' : ''}${warnCount ? ` (incl. ${warnCount} flagged)` : ''}`;
+      confirmBtn.style.display = newCount > 0 ? 'inline-flex' : 'none';
+      confirmBtn.textContent = `Import ${newCount} Customer${newCount !== 1 ? 's' : ''}`;
 
       console.log('CSV parsed:', newCount, 'new,', skipCount, 'skip');
       setTimeout(() => openModal('modal-csv-import'), 0);
