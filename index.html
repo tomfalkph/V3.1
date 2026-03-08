@@ -207,6 +207,7 @@ ul { list-style: none; }
 .btn-ghost { background: none; color: var(--text2); border: 1px solid var(--border); }
 .btn-danger { background: rgba(190,38,37,.15); color: var(--red-l); border: 1px solid rgba(190,38,37,.3); }
 .btn-success { background: rgba(46,204,113,.15); color: var(--green); border: 1px solid rgba(46,204,113,.3); }
+.btn-warning { background: rgba(245,158,11,.15); color: #f59e0b; border: 1px solid rgba(245,158,11,.3); }
 .btn-sm { padding: 7px 12px; font-size: 13px; width: auto; }
 .btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; }
 
@@ -728,6 +729,28 @@ ul { list-style: none; }
     <div class="view" id="view-settings">
       <div style="padding:16px">
 
+        <!-- Reporting -->
+        <div class="card" style="margin-bottom:20px">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div>
+              <div class="card-title">Reports</div>
+              <div style="font-size:12px;color:var(--text3);margin-top:2px">Revenue, productivity, aging, margins</div>
+            </div>
+            <button class="btn btn-secondary" onclick="showView('reporting')">View Reports</button>
+          </div>
+        </div>
+
+        <!-- Recurring Jobs -->
+        <div class="card" style="margin-bottom:20px">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div>
+              <div class="card-title">Recurring Jobs</div>
+              <div style="font-size:12px;color:var(--text3);margin-top:2px" id="settings-recurring-sub">Maintenance schedules</div>
+            </div>
+            <button class="btn btn-secondary" onclick="showView('recurring')">Manage</button>
+          </div>
+        </div>
+
         <!-- Technicians -->
         <div class="card" style="margin-bottom:20px">
           <div class="card-title" style="margin-bottom:12px">Technicians</div>
@@ -816,6 +839,33 @@ ul { list-style: none; }
       <div id="pricebook-content"></div>
     </div>
 
+    <div class="view" id="view-reporting">
+      <div style="padding:16px">
+        <button onclick="showView('settings')" style="display:flex;align-items:center;gap:6px;color:var(--text2);font-size:14px;background:none;padding:0;margin-bottom:16px">
+          <svg width="16" height="16" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+          Back to Settings
+        </button>
+        <div id="reporting-content"></div>
+      </div>
+    </div>
+
+    <div class="view" id="view-recurring">
+      <div style="padding:16px">
+        <button onclick="showView('settings')" style="display:flex;align-items:center;gap:6px;color:var(--text2);font-size:14px;background:none;padding:0;margin-bottom:16px">
+          <svg width="16" height="16" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+          Back to Settings
+        </button>
+        <div class="section-header">
+          <span class="section-title" id="recurring-count">Recurring Jobs</span>
+          <button class="add-btn" onclick="openRecurringModal()">
+            <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New Schedule
+          </button>
+        </div>
+        <div id="recurring-list"></div>
+      </div>
+    </div>
+
   </div><!-- /views -->
 
   <!-- ══ BOTTOM NAV ══ -->
@@ -845,6 +895,72 @@ ul { list-style: none; }
       Finance
     </button>
   </div>
+
+<!-- RECURRING TEMPLATE MODAL -->
+<div class="modal-overlay" id="modal-recurring">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="modal-recurring-title">New Recurring Schedule</div>
+    <input type="hidden" id="recurring-edit-id">
+
+    <div class="form-group">
+      <label class="form-label">Customer *</label>
+      <input class="form-input" id="recur-cust-search" placeholder="Search customer name…" oninput="populateRecurCustDropdown()">
+      <div id="recur-cust-results" style="margin-top:4px"></div>
+      <div id="recur-cust-selected" style="display:none;margin-top:6px;padding:8px 12px;background:var(--surface2);border:1px solid var(--red);border-radius:8px;font-size:13px;display:flex;align-items:center;justify-content:space-between"></div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Job Type</label>
+      <select class="form-select" id="recur-type">
+        <option value="">Select type</option>
+        <option>Service Call</option><option>Installation</option><option>Maintenance</option>
+        <option>Emergency</option><option>Inspection</option><option>Other</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Description *</label>
+      <textarea class="form-input form-textarea" id="recur-desc" placeholder="e.g. Annual HVAC tune-up"></textarea>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Interval</label>
+      <select class="form-select" id="recur-interval">
+        <option value="annual">Annual (every 12 months)</option>
+        <option value="semi-annual">Semi-Annual (every 6 months)</option>
+        <option value="quarterly">Quarterly (every 3 months)</option>
+        <option value="monthly">Monthly</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Last Serviced (optional)</label>
+      <input type="date" class="form-input" id="recur-last-date">
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">Leave blank if never serviced — next due = today.</div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Assign Technicians</label>
+      <div id="recur-tech-checkboxes" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px"></div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Notes</label>
+      <textarea class="form-input form-textarea" id="recur-notes" placeholder="Internal notes…"></textarea>
+    </div>
+
+    <div class="toggle-row" style="margin-bottom:14px">
+      <span class="toggle-label">Active</span>
+      <div class="toggle on" id="recur-active-toggle" onclick="this.classList.toggle('on')"></div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-recurring')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveRecurringTemplate()">Save</button>
+    </div>
+  </div>
+</div>
 
 <!-- CSV IMPORT PREVIEW -->
 <div class="modal-overlay" id="modal-csv-import">
@@ -1011,6 +1127,40 @@ ul { list-style: none; }
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal('modal-mark-paid')">Cancel</button>
       <button class="btn btn-primary" onclick="confirmMarkPaid()">Mark Paid</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-mark-partial">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Mark Partial Payment</div>
+    <input type="hidden" id="partial-job-id">
+    <div class="form-group">
+      <label class="form-label">Amount Received *</label>
+      <input class="form-input" id="partial-amount" type="number" min="0" step="0.01" placeholder="0.00">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Payment Method *</label>
+      <select class="form-select" id="partial-method" onchange="togglePartialRef()">
+        <option value="">Select…</option>
+        <option value="Cash">Cash</option>
+        <option value="Check">Check</option>
+        <option value="ACH">ACH</option>
+        <option value="Card">Card</option>
+      </select>
+    </div>
+    <div class="form-group" id="partial-ref-group" style="display:none">
+      <label class="form-label" id="partial-ref-label">Check #</label>
+      <input class="form-input" id="partial-ref" placeholder="Reference number">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Date Received *</label>
+      <input class="form-input" id="partial-date" type="date">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-mark-partial')">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmMarkPartial()">Save Partial</button>
     </div>
   </div>
 </div>
@@ -1541,6 +1691,7 @@ ul { list-style: none; }
     <div class="form-group">
       <label class="form-label">Message</label>
       <textarea class="form-input form-textarea" id="send-body" style="min-height:120px"></textarea>
+      <div id="send-link-status" style="font-size:11px;color:var(--text3);margin-top:4px"></div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal('modal-invoice-send')">Cancel</button>
@@ -1669,6 +1820,39 @@ ul { list-style: none; }
   </div>
 </div>
 
+<div class="modal-overlay" id="modal-job-photo">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Add Photo</div>
+    <input type="hidden" id="job-photo-job-id">
+    <div style="margin-bottom:12px">
+      <input type="file" id="job-photo-input" accept="image/*" capture="environment" style="display:none" onchange="handleJobPhotoSelect(this)">
+      <button onclick="document.getElementById('job-photo-input').click()" class="btn btn-ghost btn-sm" style="margin-bottom:8px">
+        <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        Take / Upload Photo
+      </button>
+      <span id="job-photo-filename" style="font-size:12px;color:var(--text3);display:block;margin-top:4px"></span>
+    </div>
+    <div style="margin-bottom:16px">
+      <label style="font-size:12px;color:var(--text3);font-weight:600;display:block;margin-bottom:4px">Caption (optional)</label>
+      <input id="job-photo-caption" class="form-input" placeholder="e.g. Before repair, Leak source, Completed work">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-job-photo')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveJobPhoto()">Upload</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-job-photo-viewer" style="z-index:1100">
+  <div class="modal" style="max-width:500px;padding:12px">
+    <div class="modal-handle"></div>
+    <img id="job-photo-viewer-img" src="" style="width:100%;border-radius:8px;max-height:70vh;object-fit:contain">
+    <div id="job-photo-viewer-caption" style="font-size:13px;color:var(--text2);margin-top:8px;text-align:center"></div>
+    <button class="btn btn-ghost" style="width:100%;margin-top:12px" onclick="closeModal('modal-job-photo-viewer')">Close</button>
+  </div>
+</div>
+
 <!-- ═══════════════════════════════════════════════════════════
      JAVASCRIPT
 ════════════════════════════════════════════════════════════ -->
@@ -1739,6 +1923,11 @@ const APP_CONFIG = {
 
   // Email (Resend — automated sends)
   resendFrom:   'billing@tomfalkph.com',
+
+  // Stripe — key intentionally omitted from source.
+  // To activate payment links: deploy a Netlify Function (functions/stripe-link.js)
+  // that holds the secret server-side, and point generateStripePaymentLink() at it.
+  stripeSecretKey: '',
 };
 // ──────────────────────────────────────────────────────────
 
@@ -1752,6 +1941,7 @@ let state = {
   archivedJobs: [],
   pricebook: [],
   materials: [],
+  recurring: [],
   nextId: { lead: 1, cust: 1, job: 1, est: 1 }
 };
 
@@ -1960,7 +2150,7 @@ function showLoadingOverlay(show) {
 async function load() {
   showLoadingOverlay(true);
   try {
-    const [leadsRes, custsRes, jobsRes, metaRes, pbRes, matRes, ratesRes, techsRes, dupesRes] = await Promise.all([
+    const [leadsRes, custsRes, jobsRes, metaRes, pbRes, matRes, ratesRes, techsRes, dupesRes, recurRes] = await Promise.all([
       sb.from('leads').select('id, data'),
       sb.from('customers').select('id, data'),
       sb.from('jobs').select('id, data'),
@@ -1970,6 +2160,7 @@ async function load() {
       sb.from('meta').select('key, value').eq('key', 'rates'),
       sb.from('meta').select('key, value').eq('key', 'techs'),
       sb.from('meta').select('key, value').eq('key', 'dismissedDupes'),
+      sb.from('meta').select('key, value').eq('key', 'recurring'),
     ]);
     if (leadsRes.error || custsRes.error || jobsRes.error) throw new Error('Supabase fetch failed');
     state.leads     = (leadsRes.data  || []).map(r => r.data);
@@ -2009,6 +2200,9 @@ async function load() {
     }
     if (dupesRes.data && dupesRes.data[0] && Array.isArray(dupesRes.data[0].value)) {
       dismissedDupes = new Set(dupesRes.data[0].value);
+    }
+    if (recurRes.data && recurRes.data[0] && Array.isArray(recurRes.data[0].value)) {
+      state.recurring = recurRes.data[0].value;
     }
   } catch(e) {
     console.warn('Supabase load failed, using localStorage fallback', e);
@@ -2059,7 +2253,8 @@ function showView(name, btnEl) {
     dashboard:'Dashboard', leads:'Leads', customers:'Customers',
     jobs:'Jobs', 'job-detail':'Job Detail', 'customer-detail':'Customer Detail',
     'lead-detail':'Lead Detail', invoice:'Invoice', unpaid:'Unpaid Invoices',
-    settings:'Settings', pricebook:'Pricebook', finance:'Finance'
+    settings:'Settings', pricebook:'Pricebook', finance:'Finance', reporting:'Reports',
+    recurring:'Recurring Jobs'
   };
   document.getElementById('page-title').textContent = titles[name] || '';
   // render
@@ -2072,9 +2267,17 @@ function showView(name, btnEl) {
     renderSettings(); populateRateInputs(); populateTechsSettings();
     const ui = document.getElementById('settings-user-info');
     if (ui && currentUser) ui.textContent = 'Signed in as ' + currentUser.username + ' (' + currentUser.role + ')';
+    const rsub = document.getElementById('settings-recurring-sub');
+    if (rsub) {
+      const active = (state.recurring||[]).filter(r => r.active !== false);
+      const due = active.filter(r => recurNextDue(r) <= today());
+      rsub.textContent = active.length + ' schedule' + (active.length !== 1 ? 's' : '') + (due.length ? ' · ' + due.length + ' due' : '');
+    }
   }
   if (name === 'pricebook') renderPricebookView();
   if (name === 'finance') { renderFinance(); }
+  if (name === 'reporting') { if (isTech()) { showView('jobs'); return; } renderReporting(); }
+  if (name === 'recurring') { if (isTech()) { showView('jobs'); return; } renderRecurring(); }
 
   const actions = document.getElementById('header-actions');
   actions.innerHTML = '';
@@ -2468,6 +2671,23 @@ function renderDashboard() {
   } else {
     const recentLeads = [...state.leads].filter(l => l.status !== 'converted').sort((a,b) => b.createdAt - a.createdAt).slice(0,2);
     dl.innerHTML = recentLeads.length ? recentLeads.map(l => leadCard(l, true)).join('') : '';
+  }
+
+  // Recurring / maintenance due alert (admin only)
+  if (!isTech()) {
+    const dueRecur = (state.recurring||[]).filter(r => r.active !== false && recurNextDue(r) <= today());
+    const existingAlert = document.getElementById('dash-recur-alert');
+    if (existingAlert) existingAlert.remove();
+    if (dueRecur.length) {
+      const alertEl = document.createElement('div');
+      alertEl.id = 'dash-recur-alert';
+      alertEl.style.cssText = 'margin-bottom:10px';
+      alertEl.innerHTML = `<div style="background:rgba(52,152,219,.1);border:1px solid rgba(52,152,219,.3);border-radius:10px;padding:12px;cursor:pointer" onclick="showView('recurring')">
+        <div style="font-size:12px;font-weight:700;color:#3498db;margin-bottom:4px">🔁 ${dueRecur.length} maintenance visit${dueRecur.length>1?'s':''} due — tap to schedule</div>
+        <div style="font-size:12px;color:var(--text2)">${dueRecur.slice(0,3).map(r => getCustomerName(r.customerId)).join(', ')}${dueRecur.length>3?' +more':''}</div>
+      </div>`;
+      document.getElementById('dash-active-jobs').parentNode.insertBefore(alertEl, document.getElementById('dash-active-jobs'));
+    }
   }
 
   // render dashboard calendar widget
@@ -3015,6 +3235,91 @@ function deleteAsset(custId, assetId) {
   openCustomerDetail(custId);
 }
 
+// ──────────────────────────────────────────────────────────
+// JOB PHOTOS
+// ──────────────────────────────────────────────────────────
+const JOB_PHOTO_BUCKET = 'job-photos';
+
+async function getJobPhotoUrl(path) {
+  if (!path || !sb) return '';
+  try {
+    const { data } = await sb.storage.from(JOB_PHOTO_BUCKET).createSignedUrl(path, 3600);
+    return data?.signedUrl || '';
+  } catch(e) { return ''; }
+}
+
+async function renderJobPhotos(jobId) {
+  const job = state.jobs.find(j => j.id === jobId) || state.archivedJobs.find(j => j.id === jobId);
+  if (!job || !(job.photos||[]).length) return;
+  for (const p of job.photos) {
+    const url = await getJobPhotoUrl(p.path);
+    const img = document.getElementById('jph-' + p.id);
+    if (img && url) img.src = url;
+  }
+}
+
+function openJobPhotoModal(jobId) {
+  document.getElementById('job-photo-job-id').value = jobId;
+  document.getElementById('job-photo-input').value = '';
+  document.getElementById('job-photo-filename').textContent = '';
+  document.getElementById('job-photo-filename')._pendingFile = null;
+  document.getElementById('job-photo-caption').value = '';
+  openModal('modal-job-photo');
+}
+
+function handleJobPhotoSelect(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const el = document.getElementById('job-photo-filename');
+  el.textContent = '📎 ' + file.name;
+  el._pendingFile = file;
+}
+
+async function saveJobPhoto() {
+  const jobId = document.getElementById('job-photo-job-id').value;
+  const job = state.jobs.find(j => j.id === jobId);
+  if (!job) return;
+  const el = document.getElementById('job-photo-filename');
+  const file = el._pendingFile;
+  const caption = document.getElementById('job-photo-caption').value.trim();
+  if (!file) { alert('Please select a photo first.'); return; }
+  if (!job.photos) job.photos = [];
+  let path = '';
+  if (sb) {
+    try {
+      const ext = file.name.split('.').pop();
+      const photoId = 'jph-' + Date.now();
+      path = `${jobId}/${photoId}.${ext}`;
+      const { error } = await sb.storage.from(JOB_PHOTO_BUCKET).upload(path, file, { upsert: false });
+      if (error) { console.warn('Job photo upload failed:', error.message); path = ''; }
+    } catch(e) { console.warn('Job photo upload error:', e); }
+  }
+  if (!path) { alert('Upload failed. Check your connection and try again.'); return; }
+  job.photos.push({ id: 'jph-' + Date.now(), path, caption, createdAt: Date.now() });
+  saveOne('jobs', job);
+  closeModal('modal-job-photo');
+  renderJobDetail();
+}
+
+async function openJobPhotoViewer(jobId, photoId) {
+  const job = state.jobs.find(j => j.id === jobId) || state.archivedJobs.find(j => j.id === jobId);
+  const p = (job?.photos || []).find(p => p.id === photoId);
+  if (!p) return;
+  const url = await getJobPhotoUrl(p.path);
+  if (!url) return;
+  document.getElementById('job-photo-viewer-img').src = url;
+  document.getElementById('job-photo-viewer-caption').textContent = p.caption || '';
+  openModal('modal-job-photo-viewer');
+}
+
+function deleteJobPhoto(jobId, photoId) {
+  const job = state.jobs.find(j => j.id === jobId);
+  if (!job) return;
+  job.photos = (job.photos || []).filter(p => p.id !== photoId);
+  saveOne('jobs', job);
+  renderJobDetail();
+}
+
 function editCustomer(id) {
   const c = state.customers.find(c => c.id === id);
   if (!c) return;
@@ -3374,6 +3679,17 @@ function saveJob() {
       if (!confirm(`⚠ Scheduling conflict detected:\n${names}\n\nSave anyway?`)) return;
     }
     saveOne('jobs', jobToSave);
+
+    // If spawned from a recurring template, update lastJobDate
+    const recurId = document.getElementById('modal-job')?.dataset?.recurId;
+    if (recurId && !editingJobId) {
+      const r = state.recurring.find(x => x.id === recurId);
+      if (r) {
+        r.lastJobDate = today();
+        saveRecurringToMeta();
+      }
+      delete document.getElementById('modal-job').dataset.recurId;
+    }
   }
   sb.from('meta').upsert({ key: 'nextId', value: state.nextId }, { onConflict: 'key' });
   editingJobId = null;
@@ -3692,11 +4008,28 @@ function renderJobDetail() {
       ${job.lineItems.length ? `<div class="line-total"><span>Total</span><span style="color:var(--green)">${fmtMoney(lineTotal)}</span></div>` : ''}
     </div>
 
-    <!-- NOTES -->
-    ${job.notes ? `<div class="card" style="margin-bottom:10px">
-      <div class="detail-section-title" style="margin-bottom:6px">Internal Notes</div>
-      <div style="font-size:14px;color:var(--text2);white-space:pre-wrap">${job.notes}</div>
-    </div>` : ''}
+    <!-- NOTES + PHOTOS -->
+    <div class="card" style="margin-bottom:10px">
+      <div class="detail-section-title" style="margin-bottom:8px">
+        <span>Notes & Photos</span>
+        <button class="btn btn-sm btn-ghost" onclick="openJobPhotoModal('${id}')">
+          <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          Add Photo
+        </button>
+      </div>
+      ${job.notes ? `<div style="font-size:14px;color:var(--text2);white-space:pre-wrap;margin-bottom:${(job.photos||[]).length ? '12px' : '0'}">${job.notes}</div>` : ''}
+      ${(job.photos||[]).length ? `
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+          ${(job.photos).map(p => `
+            <div style="position:relative">
+              <img id="jph-${p.id}" src="" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;border:1px solid var(--border);cursor:pointer" onclick="openJobPhotoViewer('${id}','${p.id}')">
+              ${p.caption ? `<div style="font-size:11px;color:var(--text3);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.caption}</div>` : ''}
+              <button onclick="deleteJobPhoto('${id}','${p.id}')" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,.55);color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:13px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center">×</button>
+            </div>
+          `).join('')}
+        </div>
+      ` : (!job.notes ? `<div style="color:var(--text3);font-size:13px">No notes or photos yet.</div>` : '')}
+    </div>
 
     <!-- HISTORY -->
     ${(() => {
@@ -3777,6 +4110,7 @@ function renderJobDetail() {
 
     ${!isTech() ? `<button class="btn btn-danger" style="margin-bottom:16px" onclick="deleteJob('${id}')">Delete Job</button>` : ''}
   `;
+  renderJobPhotos(id);
 }
 
 function changeJobStatus(jobId, newStatus) {
@@ -4738,8 +5072,18 @@ function renderInvoice() {
       <span class="inv-status-pill ${invStatus}">${invStatus.toUpperCase()}</span>
       <button class="btn btn-sm ${invStatus==='draft'?'btn-primary':'btn-ghost'}" onclick="setInvoiceStatus('${job.id}','draft')">Draft</button>
       <button class="btn btn-sm ${invStatus==='sent'?'btn-primary':'btn-ghost'}" onclick="setInvoiceStatus('${job.id}','sent')">Sent</button>
+      <button class="btn btn-sm ${invStatus==='partial'?'btn-warning':'btn-ghost'}" onclick="${invStatus==='partial' ? '' : `openMarkPartial('${job.id}')`}" ${invStatus==='partial'?'disabled':''}>Partial</button>
       <button class="btn btn-sm ${invStatus==='paid'?'btn-success':'btn-ghost'}" onclick="${invStatus==='paid' ? '' : `openMarkPaid('${job.id}')`}" ${invStatus==='paid'?'disabled':''}>Paid</button>
     </div>
+    ${invStatus === 'partial' && job.partialAmount ? `
+    <div class="no-print" style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:var(--text2);display:flex;gap:16px;flex-wrap:wrap">
+      <span style="color:#f59e0b;font-weight:600">⬤ Partial</span>
+      <span>Received: ${fmtMoney(job.partialAmount)}</span>
+      ${job.partialMethod ? `<span>${job.partialMethod}</span>` : ''}
+      ${job.partialRef ? `<span>#${job.partialRef}</span>` : ''}
+      ${job.partialDate ? `<span>${new Date(job.partialDate + 'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</span>` : ''}
+      <span style="color:var(--text3)">Balance: ${fmtMoney(grandTotal - job.partialAmount)}</span>
+    </div>` : ''}
     ${invStatus === 'paid' && (job.paidMethod || job.invoicePaidAt) ? `
     <div class="no-print" style="background:rgba(46,204,113,.08);border:1px solid rgba(46,204,113,.25);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:var(--text2);display:flex;gap:16px;flex-wrap:wrap">
       <span style="color:var(--green);font-weight:600">✓ Paid</span>
@@ -4939,9 +5283,53 @@ function confirmMarkPaid() {
   renderInvoice();
 }
 
+function openMarkPartial(jobId) {
+  document.getElementById('partial-job-id').value = jobId;
+  document.getElementById('partial-amount').value = '';
+  document.getElementById('partial-method').value = '';
+  document.getElementById('partial-ref').value = '';
+  document.getElementById('partial-ref-group').style.display = 'none';
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('partial-date').value = today;
+  openModal('modal-mark-partial');
+}
+
+function togglePartialRef() {
+  const method = document.getElementById('partial-method').value;
+  const group = document.getElementById('partial-ref-group');
+  const label = document.getElementById('partial-ref-label');
+  if (method === 'Check') { group.style.display = 'block'; label.textContent = 'Check #'; }
+  else if (method === 'ACH') { group.style.display = 'block'; label.textContent = 'Reference #'; }
+  else { group.style.display = 'none'; }
+}
+
+function confirmMarkPartial() {
+  const jobId = document.getElementById('partial-job-id').value;
+  const amount = parseFloat(document.getElementById('partial-amount').value);
+  const method = document.getElementById('partial-method').value;
+  const ref = document.getElementById('partial-ref').value.trim();
+  const date = document.getElementById('partial-date').value;
+  if (!amount || isNaN(amount) || amount <= 0) { alert('Amount required.'); return; }
+  if (!method) { alert('Payment method required.'); return; }
+  if (!date) { alert('Date required.'); return; }
+  const job = state.jobs.find(j => j.id === jobId) || state.archivedJobs.find(j => j.id === jobId);
+  if (!job) return;
+  job.invoiceStatus = 'partial';
+  job.partialAmount = amount;
+  job.partialMethod = method;
+  job.partialRef = ref || null;
+  job.partialDate = date;
+  job.history = job.history || [];
+  job.history.push({ action: 'status_change', to: 'invoice_partial', at: Date.now(), method, ref: ref || null, amount });
+  saveOne('jobs', job);
+  closeModal('modal-mark-partial');
+  renderInvoice();
+}
+
 function setInvoiceStatus(jobId, status) {
-  // Guard: 'paid' must go through openMarkPaid modal to capture payment method/ref
+  // Guard: 'paid' and 'partial' must go through modals to capture payment details
   if (status === 'paid') { openMarkPaid(jobId); return; }
+  if (status === 'partial') { openMarkPartial(jobId); return; }
   const job = state.jobs.find(j => j.id === jobId);
   if (!job) return;
   job.invoiceStatus = status;
@@ -4980,6 +5368,62 @@ function setEstimateStatus(jobId, status) {
   if (currentView === 'job-detail') renderJobDetail();
 }
 
+async function generateStripePaymentLink(jobId) {
+  const job = state.jobs.find(j => j.id === jobId);
+  if (!job || job.status === 'estimate') return null;
+  // Return cached link if already generated
+  if (job.paymentLink) return job.paymentLink;
+  // Key must be present — see Netlify Function setup in handoff doc
+  if (!APP_CONFIG.stripeSecretKey) {
+    console.warn('Stripe: no key configured. Payment link generation disabled.');
+    return null;
+  }
+  const total = getInvoiceTotal(job);
+  const cardTotal = Math.round((total * (1 + APP_CONFIG.cardSurchargeRate) + APP_CONFIG.cardSurchargeFee) * 100); // cents
+  const invNum = job.invoiceNumber || 'INV-' + String(job.jobNumber).padStart(4,'0');
+  const custName = getCustomerName(job.customerId);
+  try {
+    // Step 1: create a price
+    const priceRes = await fetch('https://api.stripe.com/v1/prices', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${APP_CONFIG.stripeSecretKey}`,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: new URLSearchParams({
+        'unit_amount': cardTotal,
+        'currency': 'usd',
+        'product_data[name]': `${APP_CONFIG.company} — ${invNum}`,
+        'product_data[description]': `${custName} · Job #${job.jobNumber} · ${job.description || job.type || 'Service'}`
+      })
+    });
+    const price = await priceRes.json();
+    if (!price.id) { console.warn('Stripe price error:', price); return null; }
+    // Step 2: create payment link
+    const linkRes = await fetch('https://api.stripe.com/v1/payment_links', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${APP_CONFIG.stripeSecretKey}`,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: new URLSearchParams({
+        'line_items[0][price]': price.id,
+        'line_items[0][quantity]': '1',
+        'metadata[job_id]': jobId,
+        'metadata[invoice_num]': invNum
+      })
+    });
+    const link = await linkRes.json();
+    if (!link.url) { console.warn('Stripe link error:', link); return null; }
+    job.paymentLink = link.url;
+    saveOne('jobs', job);
+    return link.url;
+  } catch(e) {
+    console.warn('Stripe payment link error:', e);
+    return null;
+  }
+}
+
 function openSendInvoice(jobId) {
   const job = state.jobs.find(j => j.id === jobId);
   const cust = job ? state.customers.find(c => c.id === job.customerId) : null;
@@ -4991,22 +5435,30 @@ function openSendInvoice(jobId) {
   document.getElementById('send-job-id').value = jobId;
   document.getElementById('send-email').value = cust?.email || '';
   document.getElementById('send-subject').value = `${isEstimate ? 'Estimate' : 'Invoice'} ${invNum} — ${APP_CONFIG.company}`;
-  document.getElementById('send-body').value =
-`Hi ${cust?.name?.split(' ')[0] || 'there'},
 
-Thank you for choosing ${APP_CONFIG.company}. Please find your ${isEstimate ? 'estimate' : 'invoice'} details below.
+  const buildBody = (payLink) => {
+    const linkLine = payLink ? `\nPay online (card): ${payLink}\n` : '';
+    return `Hi ${cust?.name?.split(' ')[0] || 'there'},\n\nThank you for choosing ${APP_CONFIG.company}. Please find your ${isEstimate ? 'estimate' : 'invoice'} details below.\n\n${isEstimate ? 'Estimate' : 'Invoice'} #: ${invNum}\nJob: #${job.jobNumber} — ${job.description || job.type || 'Service'}\n${isEstimate ? `Estimate Total: ${fmtMoney(total)}` : `Total (ACH / Check): ${fmtMoney(total)}\nTotal (Card): ${fmtMoney(cardTotal)}${linkLine}`}\nPlease call or reply to this email with any questions.\n\n— ${APP_CONFIG.ownerName}\n${APP_CONFIG.company}\n${APP_CONFIG.phone}\n${APP_CONFIG.website}`;
+  };
 
-${isEstimate ? 'Estimate' : 'Invoice'} #: ${invNum}
-Job: #${job.jobNumber} — ${job.description || job.type || 'Service'}
-${isEstimate ? `Estimate Total: ${fmtMoney(total)}` : `Total (ACH / Check): ${fmtMoney(total)}
-Total (Card): ${fmtMoney(cardTotal)}`}
+  // Set body immediately with cached link or blank
+  document.getElementById('send-body').value = buildBody(job.paymentLink || null);
 
-Please call or reply to this email with any questions.
-
-— ${APP_CONFIG.ownerName}
-${APP_CONFIG.company}
-${APP_CONFIG.phone}
-${APP_CONFIG.website}`;
+  // If not an estimate and no cached link, generate one async and update body
+  if (!isEstimate) {
+    const linkStatus = document.getElementById('send-link-status');
+    if (linkStatus) linkStatus.textContent = job.paymentLink ? '✓ Payment link ready' : 'Generating payment link…';
+    if (!job.paymentLink) {
+      generateStripePaymentLink(jobId).then(url => {
+        if (url) {
+          document.getElementById('send-body').value = buildBody(url);
+          if (linkStatus) linkStatus.textContent = '✓ Payment link ready';
+        } else {
+          if (linkStatus) linkStatus.textContent = '⚠ Payment link unavailable';
+        }
+      });
+    }
+  }
 
   openModal('modal-invoice-send');
 }
@@ -5193,6 +5645,472 @@ async function deleteMaterialFromTable(id) {
   try {
     await sb.from('materials').delete().eq('id', id);
   } catch(e) { console.error('deleteMaterialFromTable error', e); }
+}
+
+// ──────────────────────────────────────────────────────────
+// REPORTING
+// ──────────────────────────────────────────────────────────
+function renderReporting() {
+  const el = document.getElementById('reporting-content');
+  if (!el) return;
+
+  const allJobs = [...(state.jobs || []), ...(state.archivedJobs || [])];
+  const now = Date.now();
+  const msDay = 86400000;
+
+  // ── 1. REVENUE BY MONTH ──────────────────────────────────
+  const revenueByMonth = {};
+  allJobs.forEach(j => {
+    if (!['paid','closed'].includes(j.status) && j.invoiceStatus !== 'paid') return;
+    const d = new Date(j.invoicePaidAt || j.createdAt || now);
+    const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+    const label = d.toLocaleDateString('en-US',{month:'short',year:'numeric'});
+    if (!revenueByMonth[key]) revenueByMonth[key] = { label, total: 0 };
+    revenueByMonth[key].total += getInvoiceTotal(j);
+  });
+  const revMonths = Object.keys(revenueByMonth).sort().slice(-12);
+  const revMax = Math.max(...revMonths.map(k => revenueByMonth[k].total), 1);
+
+  // ── 2. TECH PRODUCTIVITY ─────────────────────────────────
+  const techStats = {};
+  APP_CONFIG.techs.forEach(t => { techStats[t] = { hours: 0, jobs: 0, revenue: 0 }; });
+  allJobs.forEach(j => {
+    const rev = getInvoiceTotal(j);
+    (j.techs || []).forEach(t => {
+      if (!techStats[t]) techStats[t] = { hours: 0, jobs: 0, revenue: 0 };
+      techStats[t].jobs++;
+      techStats[t].revenue += rev / Math.max((j.techs||[]).length, 1);
+    });
+    (j.timeLog || []).forEach(e => {
+      const d = calcDuration(e.clockIn, e.clockOut);
+      if (d && techStats[e.tech]) techStats[e.tech].hours += d.hrs;
+    });
+  });
+
+  // ── 3. INVOICE AGING ─────────────────────────────────────
+  const aging = { current: [], d30: [], d60: [], d90: [] };
+  allJobs.forEach(j => {
+    if (!['sent','partial'].includes(j.invoiceStatus)) return;
+    const sentAt = j.invoiceSentAt || j.createdAt || now;
+    const ageDays = Math.floor((now - sentAt) / msDay);
+    const total = getInvoiceTotal(j);
+    const partial = j.partialAmount || 0;
+    const balance = total - partial;
+    if (balance <= 0) return;
+    const custName = getCustomerName(j.customerId);
+    const rec = { jobId: j.id, jobNum: j.jobNumber, custName, balance, ageDays, sentAt };
+    if (ageDays <= 30) aging.current.push(rec);
+    else if (ageDays <= 60) aging.d30.push(rec);
+    else if (ageDays <= 90) aging.d60.push(rec);
+    else aging.d90.push(rec);
+  });
+
+  // ── 4. JOB VOLUME BY TYPE/STATUS ────────────────────────
+  const statusCounts = {};
+  allJobs.forEach(j => {
+    const s = j.status || 'unknown';
+    statusCounts[s] = (statusCounts[s] || 0) + 1;
+  });
+  const statusOrder = ['unscheduled','scheduled','active','completed','estimate','invoiced','paid','closed'];
+  const statusColors = {
+    unscheduled:'#888', scheduled:'#3b82f6', active:'#22c55e',
+    completed:'#f59e0b', estimate:'#a855f7', invoiced:'#BE2625',
+    paid:'#22c55e', closed:'#555'
+  };
+  const totalJobs = Object.values(statusCounts).reduce((a,b)=>a+b,0) || 1;
+
+  // ── 5. MARGIN / PROFITABILITY ────────────────────────────
+  const LABOR_COST = 40; // $/hr — from app_settings labor_cost_per_hour
+  let totalRevenue = 0, totalLaborCost = 0, totalMaterialCost = 0, totalMaterialSell = 0;
+  allJobs.forEach(j => {
+    if (!['paid','closed','invoiced'].includes(j.status)) return;
+    totalRevenue += getInvoiceTotal(j);
+    (j.lineItems || []).forEach(li => {
+      if (li.type === 'labor') {
+        totalLaborCost += (li.qty || 0) * LABOR_COST;
+      } else if (li.type === 'material') {
+        const cost = li.cost || (li.rate ? li.rate / (1 + 0.4) : 0);
+        totalMaterialCost += cost * (li.qty || 1);
+        totalMaterialSell += (li.total || 0);
+      }
+    });
+  });
+  const totalCost = totalLaborCost + totalMaterialCost;
+  const grossProfit = totalRevenue - totalCost;
+  const grossMargin = totalRevenue > 0 ? (grossProfit / totalRevenue * 100) : 0;
+  const matMargin = totalMaterialSell > 0 ? ((totalMaterialSell - totalMaterialCost) / totalMaterialSell * 100) : 0;
+
+  // ── RENDER ───────────────────────────────────────────────
+  const agingSection = (label, records, color) => {
+    if (!records.length) return '';
+    const total = records.reduce((s,r) => s + r.balance, 0);
+    return `
+      <div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;color:${color};margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">${label}<span>${fmtMoney(total)}</span></div>
+        ${records.map(r => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid var(--border);font-size:13px;cursor:pointer" onclick="openJobDetail('${r.jobId}')">
+            <div>
+              <span style="color:var(--text)">${r.custName}</span>
+              <span style="color:var(--text3);font-size:11px;margin-left:6px">#${r.jobNum} · ${r.ageDays}d</span>
+            </div>
+            <span style="color:${color};font-weight:600">${fmtMoney(r.balance)}</span>
+          </div>
+        `).join('')}
+      </div>`;
+  };
+
+  el.innerHTML = `
+    <!-- REVENUE BY MONTH -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="detail-section-title" style="margin-bottom:14px">Revenue by Month</div>
+      ${revMonths.length ? `
+        <div style="display:flex;align-items:flex-end;gap:6px;height:120px;overflow-x:auto;padding-bottom:4px">
+          ${revMonths.map(k => {
+            const pct = revenueByMonth[k].total / revMax * 100;
+            return `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;min-width:36px;flex:1">
+              <div style="font-size:10px;color:var(--text3)">${fmtMoney(revenueByMonth[k].total).replace('$','').replace(',','k').split('.')[0]}</div>
+              <div style="width:100%;background:var(--red);border-radius:4px 4px 0 0;height:${Math.max(pct,2)}%;min-height:3px"></div>
+              <div style="font-size:9px;color:var(--text3);white-space:nowrap">${revenueByMonth[k].label}</div>
+            </div>`;
+          }).join('')}
+        </div>
+        <div style="text-align:right;font-size:12px;color:var(--text3);margin-top:8px">
+          Total (shown): ${fmtMoney(revMonths.reduce((s,k) => s + revenueByMonth[k].total, 0))}
+        </div>
+      ` : '<div style="color:var(--text3);font-size:13px">No paid invoices yet.</div>'}
+    </div>
+
+    <!-- TECH PRODUCTIVITY -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="detail-section-title" style="margin-bottom:12px">Tech Productivity</div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">
+              <th style="text-align:left;padding:4px 8px 8px 0;font-weight:600">Tech</th>
+              <th style="text-align:right;padding:4px 8px 8px;font-weight:600">Jobs</th>
+              <th style="text-align:right;padding:4px 8px 8px;font-weight:600">Hours</th>
+              <th style="text-align:right;padding:4px 0 8px 8px;font-weight:600">Revenue</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${Object.entries(techStats).map(([tech, s]) => `
+              <tr style="border-top:1px solid var(--border)">
+                <td style="padding:8px 8px 8px 0;font-weight:600;color:var(--text)">${tech}</td>
+                <td style="padding:8px;text-align:right;color:var(--text2)">${s.jobs}</td>
+                <td style="padding:8px;text-align:right;color:var(--text2)">${s.hours.toFixed(1)}h</td>
+                <td style="padding:8px 0 8px 8px;text-align:right;color:var(--green);font-weight:600">${fmtMoney(s.revenue)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- INVOICE AGING -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="detail-section-title" style="margin-bottom:12px">Invoice Aging</div>
+      ${(aging.current.length + aging.d30.length + aging.d60.length + aging.d90.length) === 0
+        ? '<div style="color:var(--text3);font-size:13px">No outstanding invoices.</div>'
+        : `${agingSection('0–30 days', aging.current, 'var(--text2)')}
+           ${agingSection('31–60 days', aging.d30, '#f59e0b')}
+           ${agingSection('61–90 days', aging.d60, '#ef4444')}
+           ${agingSection('90+ days', aging.d90, '#be2625')}`
+      }
+    </div>
+
+    <!-- JOB VOLUME -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="detail-section-title" style="margin-bottom:12px">Job Volume by Status</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:10px">${totalJobs} total jobs</div>
+      ${statusOrder.filter(s => statusCounts[s]).map(s => {
+        const pct = statusCounts[s] / totalJobs * 100;
+        return `<div style="margin-bottom:8px">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+            <span style="color:var(--text2);text-transform:capitalize">${s}</span>
+            <span style="color:var(--text3)">${statusCounts[s]} (${pct.toFixed(0)}%)</span>
+          </div>
+          <div style="height:6px;background:var(--surface2);border-radius:3px;overflow:hidden">
+            <div style="height:100%;width:${pct}%;background:${statusColors[s]||'#888'};border-radius:3px"></div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+
+    <!-- MARGIN / PROFITABILITY -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="detail-section-title" style="margin-bottom:12px">Profitability</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+        <div style="background:var(--surface2);border-radius:10px;padding:12px">
+          <div style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Total Revenue</div>
+          <div style="font-size:20px;font-weight:700;color:var(--text)">${fmtMoney(totalRevenue)}</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:10px;padding:12px">
+          <div style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Gross Profit</div>
+          <div style="font-size:20px;font-weight:700;color:var(--green)">${fmtMoney(grossProfit)}</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:10px;padding:12px">
+          <div style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Gross Margin</div>
+          <div style="font-size:20px;font-weight:700;color:${grossMargin >= 40 ? 'var(--green)' : grossMargin >= 25 ? '#f59e0b' : '#ef4444'}">${grossMargin.toFixed(1)}%</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:10px;padding:12px">
+          <div style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Material Margin</div>
+          <div style="font-size:20px;font-weight:700;color:var(--text2)">${matMargin.toFixed(1)}%</div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text3)">Labor cost basis: $${LABOR_COST}/hr · Includes invoiced + paid + closed jobs</div>
+    </div>
+  `;
+}
+
+// ──────────────────────────────────────────────────────────
+// RECURRING JOBS
+// ──────────────────────────────────────────────────────────
+
+// Returns interval in months
+function recurIntervalMonths(interval) {
+  return { annual: 12, 'semi-annual': 6, quarterly: 3, monthly: 1 }[interval] || 12;
+}
+
+// Returns next due date string (YYYY-MM-DD) for a template
+function recurNextDue(r) {
+  if (!r.lastJobDate) return today(); // never serviced → due now
+  const last = new Date(r.lastJobDate + 'T00:00:00');
+  const months = recurIntervalMonths(r.interval);
+  last.setMonth(last.getMonth() + months);
+  return last.toISOString().slice(0, 10);
+}
+
+// Returns 'overdue' | 'due-soon' | 'ok'
+function recurStatus(r) {
+  const due = recurNextDue(r);
+  const todayStr = today();
+  if (due <= todayStr) return 'overdue';
+  // within 14 days = due-soon
+  const diffMs = new Date(due) - new Date(todayStr);
+  if (diffMs <= 14 * 86400000) return 'due-soon';
+  return 'ok';
+}
+
+function recurStatusDot(r) {
+  const s = recurStatus(r);
+  const map = { overdue: '#ef4444', 'due-soon': '#f59e0b', ok: '#22c55e' };
+  return `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${map[s]};flex-shrink:0"></span>`;
+}
+
+async function saveRecurringToMeta() {
+  await sb.from('meta').upsert({ key: 'recurring', value: state.recurring }, { onConflict: 'key' });
+}
+
+let selectedRecurCustomerId = null;
+let editingRecurId = null;
+
+function openRecurringModal(id) {
+  editingRecurId = id || null;
+  selectedRecurCustomerId = null;
+
+  // Populate tech checkboxes
+  const box = document.getElementById('recur-tech-checkboxes');
+  box.innerHTML = APP_CONFIG.techs.map(t =>
+    `<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;padding:5px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px">
+      <input type="checkbox" value="${t}" style="accent-color:var(--red)"> ${t}
+    </label>`
+  ).join('');
+
+  if (id) {
+    const r = state.recurring.find(x => x.id === id);
+    if (!r) return;
+    document.getElementById('modal-recurring-title').textContent = 'Edit Recurring Schedule';
+    document.getElementById('recurring-edit-id').value = id;
+    // pre-fill customer
+    const cust = state.customers.find(c => c.id === r.customerId);
+    if (cust) selectRecurCustomer(cust);
+    document.getElementById('recur-type').value = r.jobType || '';
+    document.getElementById('recur-desc').value = r.description || '';
+    document.getElementById('recur-interval').value = r.interval || 'annual';
+    document.getElementById('recur-last-date').value = r.lastJobDate || '';
+    document.getElementById('recur-notes').value = r.notes || '';
+    const activeToggle = document.getElementById('recur-active-toggle');
+    r.active !== false ? activeToggle.classList.add('on') : activeToggle.classList.remove('on');
+    if (r.techs) {
+      box.querySelectorAll('input').forEach(i => { i.checked = r.techs.includes(i.value); });
+    }
+  } else {
+    document.getElementById('modal-recurring-title').textContent = 'New Recurring Schedule';
+    document.getElementById('recurring-edit-id').value = '';
+    document.getElementById('recur-cust-search').value = '';
+    document.getElementById('recur-cust-results').innerHTML = '';
+    document.getElementById('recur-cust-selected').style.display = 'none';
+    document.getElementById('recur-type').selectedIndex = 0;
+    document.getElementById('recur-desc').value = '';
+    document.getElementById('recur-interval').value = 'annual';
+    document.getElementById('recur-last-date').value = '';
+    document.getElementById('recur-notes').value = '';
+    document.getElementById('recur-active-toggle').classList.add('on');
+  }
+  openModal('modal-recurring');
+}
+
+function populateRecurCustDropdown() {
+  const q = document.getElementById('recur-cust-search').value.trim().toLowerCase();
+  const res = document.getElementById('recur-cust-results');
+  if (!q) { res.innerHTML = ''; return; }
+  const matches = state.customers.filter(c => c.name.toLowerCase().includes(q) || (c.phone||'').includes(q));
+  res.innerHTML = matches.slice(0,5).map(c =>
+    `<div onclick="selectRecurCustomer(${JSON.stringify(c).replace(/"/g,'&quot;')})" style="padding:9px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin-top:4px;cursor:pointer;font-size:14px">
+      <div style="font-weight:600">${c.name}${c.maintenancePlan ? ' <span style="font-size:10px;color:var(--red-l);font-weight:700">PLAN</span>' : ''}</div>
+      <div style="font-size:12px;color:var(--text2)">${c.phone||''} ${c.address||''}</div>
+    </div>`
+  ).join('') || '<div style="font-size:13px;color:var(--text3);padding:8px">No customers found.</div>';
+}
+
+function selectRecurCustomer(c) {
+  if (typeof c === 'string') c = JSON.parse(c);
+  selectedRecurCustomerId = c.id;
+  document.getElementById('recur-cust-results').innerHTML = '';
+  document.getElementById('recur-cust-search').value = '';
+  const sel = document.getElementById('recur-cust-selected');
+  sel.style.display = 'flex';
+  sel.innerHTML = `<span style="font-weight:600">${c.name}</span>
+    <button onclick="clearRecurCustomer()" style="background:none;color:var(--text3);padding:2px 6px;font-size:18px;line-height:1">×</button>`;
+}
+
+function clearRecurCustomer() {
+  selectedRecurCustomerId = null;
+  document.getElementById('recur-cust-selected').style.display = 'none';
+}
+
+async function saveRecurringTemplate() {
+  if (!selectedRecurCustomerId) { alert('Select a customer.'); return; }
+  const desc = document.getElementById('recur-desc').value.trim();
+  if (!desc) { alert('Description is required.'); return; }
+
+  const techs = [...document.querySelectorAll('#recur-tech-checkboxes input:checked')].map(i => i.value);
+  const active = document.getElementById('recur-active-toggle').classList.contains('on');
+  const lastJobDate = document.getElementById('recur-last-date').value || null;
+
+  if (editingRecurId) {
+    const r = state.recurring.find(x => x.id === editingRecurId);
+    if (r) {
+      r.customerId    = selectedRecurCustomerId;
+      r.jobType       = document.getElementById('recur-type').value;
+      r.description   = desc;
+      r.interval      = document.getElementById('recur-interval').value;
+      r.lastJobDate   = lastJobDate;
+      r.techs         = techs;
+      r.notes         = document.getElementById('recur-notes').value.trim();
+      r.active        = active;
+    }
+  } else {
+    state.recurring.push({
+      id:           uid('rec'),
+      customerId:   selectedRecurCustomerId,
+      jobType:      document.getElementById('recur-type').value,
+      description:  desc,
+      interval:     document.getElementById('recur-interval').value,
+      lastJobDate:  lastJobDate,
+      techs:        techs,
+      notes:        document.getElementById('recur-notes').value.trim(),
+      active:       active,
+      createdAt:    Date.now()
+    });
+  }
+
+  await saveRecurringToMeta();
+  closeModal('modal-recurring');
+  renderRecurring();
+}
+
+async function deleteRecurringTemplate(id) {
+  if (!confirm('Delete this recurring schedule?')) return;
+  state.recurring = state.recurring.filter(r => r.id !== id);
+  await saveRecurringToMeta();
+  renderRecurring();
+}
+
+// Pre-fills job modal from recurring template and opens it
+function scheduleNow(id) {
+  const r = state.recurring.find(x => x.id === id);
+  if (!r) return;
+  const cust = state.customers.find(c => c.id === r.customerId);
+  if (!cust) { alert('Customer not found.'); return; }
+
+  resetJobModal();
+  document.getElementById('modal-job-title').textContent = 'Schedule Maintenance Visit';
+  selectJobCustomer(cust);
+  document.getElementById('job-desc').value = r.description || '';
+  document.getElementById('job-type').value = r.jobType || '';
+  document.getElementById('job-address').value = cust.address || '';
+  document.getElementById('job-notes').value = r.notes || '';
+  if (r.techs) {
+    document.querySelectorAll('#job-tech-checkboxes input').forEach(i => {
+      i.checked = r.techs.includes(i.value);
+    });
+  }
+  // Tag so saveJob can update lastJobDate after save
+  document.getElementById('modal-job').dataset.recurId = id;
+  openModal('modal-job');
+}
+
+function renderRecurring() {
+  const all = state.recurring || [];
+  const active = all.filter(r => r.active !== false);
+  const inactive = all.filter(r => r.active === false);
+  const sorted = [
+    ...active.sort((a,b) => recurNextDue(a).localeCompare(recurNextDue(b))),
+    ...inactive
+  ];
+
+  document.getElementById('recurring-count').textContent =
+    active.length + ' Active Schedule' + (active.length !== 1 ? 's' : '');
+
+  if (!sorted.length) {
+    document.getElementById('recurring-list').innerHTML =
+      '<div class="empty-state"><p>No recurring schedules yet.</p></div>';
+    return;
+  }
+
+  const INTERVAL_LABELS = { annual: 'Annual', 'semi-annual': 'Semi-Annual', quarterly: 'Quarterly', monthly: 'Monthly' };
+  const STATUS_LABELS   = { overdue: 'Overdue', 'due-soon': 'Due Soon', ok: 'Upcoming' };
+  const STATUS_COLORS   = { overdue: '#ef4444', 'due-soon': '#f59e0b', ok: '#22c55e' };
+
+  document.getElementById('recurring-list').innerHTML = sorted.map(r => {
+    const cust = state.customers.find(c => c.id === r.customerId);
+    const custName = cust ? cust.name : 'Unknown Customer';
+    const nextDue = recurNextDue(r);
+    const st = r.active !== false ? recurStatus(r) : 'inactive';
+    const stColor = st === 'inactive' ? 'var(--text3)' : STATUS_COLORS[st];
+    const stLabel = st === 'inactive' ? 'Inactive' : STATUS_LABELS[st];
+
+    return `<div class="card" style="margin-bottom:10px${r.active === false ? ';opacity:.55' : ''}">
+      <div class="card-header" style="align-items:flex-start">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
+            <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${stColor};flex-shrink:0"></span>
+            <div class="card-title" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${custName}</div>
+          </div>
+          <div class="card-sub">${r.description}</div>
+        </div>
+        <span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;background:${stColor}22;color:${stColor};flex-shrink:0;margin-left:8px">${stLabel}</span>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;font-size:12px;color:var(--text3)">
+        <span>🔁 ${INTERVAL_LABELS[r.interval] || r.interval}</span>
+        <span>📅 Next: <span style="color:${stColor};font-weight:600">${fmtDate(nextDue)}</span></span>
+        ${r.lastJobDate ? `<span>✓ Last: ${fmtDate(r.lastJobDate)}</span>` : '<span>✓ Never serviced</span>'}
+        ${r.techs && r.techs.length ? `<span>👤 ${r.techs.join(', ')}</span>` : ''}
+      </div>
+      ${r.active !== false ? `
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn btn-sm btn-primary" onclick="scheduleNow('${r.id}')">Schedule Now</button>
+        <button class="btn btn-sm btn-ghost" onclick="openRecurringModal('${r.id}')">Edit</button>
+        <button class="btn btn-sm btn-ghost" onclick="deleteRecurringTemplate('${r.id}')" style="color:var(--red-l);border-color:rgba(190,38,37,.3)">Delete</button>
+      </div>` : `
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn btn-sm btn-ghost" onclick="openRecurringModal('${r.id}')">Edit</button>
+        <button class="btn btn-sm btn-ghost" onclick="deleteRecurringTemplate('${r.id}')" style="color:var(--red-l);border-color:rgba(190,38,37,.3)">Delete</button>
+      </div>`}
+    </div>`;
+  }).join('');
 }
 
 function renderSettings(keepPage) {
