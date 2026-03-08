@@ -1924,10 +1924,9 @@ const APP_CONFIG = {
   // Email (Resend — automated sends)
   resendFrom:   'billing@tomfalkph.com',
 
-  // Stripe — key intentionally omitted from source.
-  // To activate payment links: deploy a Netlify Function (functions/stripe-link.js)
-  // that holds the secret server-side, and point generateStripePaymentLink() at it.
-  stripeSecretKey: '',
+  // Stripe — secret key lives in Netlify env var STRIPE_SECRET_KEY, not here.
+  // See netlify/functions/stripe-link.js. Works with test and live keys — just swap the env var.
+  // ⚠️  REPLACE test key with live key in Netlify before going live.
 };
 // ──────────────────────────────────────────────────────────
 
@@ -5373,51 +5372,33 @@ async function generateStripePaymentLink(jobId) {
   if (!job || job.status === 'estimate') return null;
   // Return cached link if already generated
   if (job.paymentLink) return job.paymentLink;
-  // Key must be present — see Netlify Function setup in handoff doc
-  if (!APP_CONFIG.stripeSecretKey) {
-    console.warn('Stripe: no key configured. Payment link generation disabled.');
-    return null;
-  }
+
   const total = getInvoiceTotal(job);
   const cardTotal = Math.round((total * (1 + APP_CONFIG.cardSurchargeRate) + APP_CONFIG.cardSurchargeFee) * 100); // cents
   const invNum = job.invoiceNumber || 'INV-' + String(job.jobNumber).padStart(4,'0');
   const custName = getCustomerName(job.customerId);
+
   try {
-    // Step 1: create a price
-    const priceRes = await fetch('https://api.stripe.com/v1/prices', {
+    // Calls netlify/functions/stripe-link.js — secret key lives there, never here.
+    // ⚠️  Ensure STRIPE_SECRET_KEY env var in Netlify is set to your LIVE key before
+    //     taking real payments. Test key (sk_test_) collects no real money.
+    const res = await fetch('/.netlify/functions/stripe-link', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${APP_CONFIG.stripeSecretKey}`,
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: new URLSearchParams({
-        'unit_amount': cardTotal,
-        'currency': 'usd',
-        'product_data[name]': `${APP_CONFIG.company} — ${invNum}`,
-        'product_data[description]': `${custName} · Job #${job.jobNumber} · ${job.description || job.type || 'Service'}`
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        amountCents:        cardTotal,
+        productName:        `${APP_CONFIG.company} — ${invNum}`,
+        productDescription: `${custName} · Job #${job.jobNumber} · ${job.description || job.type || 'Service'}`,
+        jobId:              jobId,
+        invoiceNumber:      invNum
       })
     });
-    const price = await priceRes.json();
-    if (!price.id) { console.warn('Stripe price error:', price); return null; }
-    // Step 2: create payment link
-    const linkRes = await fetch('https://api.stripe.com/v1/payment_links', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${APP_CONFIG.stripeSecretKey}`,
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: new URLSearchParams({
-        'line_items[0][price]': price.id,
-        'line_items[0][quantity]': '1',
-        'metadata[job_id]': jobId,
-        'metadata[invoice_num]': invNum
-      })
-    });
-    const link = await linkRes.json();
-    if (!link.url) { console.warn('Stripe link error:', link); return null; }
-    job.paymentLink = link.url;
+    const data = await res.json();
+    if (!data.url) { console.warn('stripe-link function error:', data); return null; }
+    if (data.mode === 'test') console.warn('⚠️  Stripe test mode — no real money collected.');
+    job.paymentLink = data.url;
     saveOne('jobs', job);
-    return link.url;
+    return data.url;
   } catch(e) {
     console.warn('Stripe payment link error:', e);
     return null;
