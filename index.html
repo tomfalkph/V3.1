@@ -3165,20 +3165,20 @@ function showView(name, btnEl) {
   if (name === 'customers') renderCustomers();
   if (name === 'jobs') renderJobs();
   if (name === 'settings') {
-    if (isTech()) { showView('jobs'); return; }
     renderSettings();
-    populateRateInputs(); populateTechsSettings();
-    const rsub = document.getElementById('settings-recurring-sub');
-    if (rsub) {
-      const active = (state.recurring||[]).filter(r => r.active !== false);
-      const due = active.filter(r => recurNextDue(r) <= today());
-      rsub.textContent = active.length + ' schedule' + (active.length !== 1 ? 's' : '') + (due.length ? ' · ' + due.length + ' due' : '');
+    if (!isTech()) {
+      populateRateInputs(); populateTechsSettings();
+      const rsub = document.getElementById('settings-recurring-sub');
+      if (rsub) {
+        const active = (state.recurring||[]).filter(r => r.active !== false);
+        const due = active.filter(r => recurNextDue(r) <= today());
+        rsub.textContent = active.length + ' schedule' + (active.length !== 1 ? 's' : '') + (due.length ? ' · ' + due.length + ' due' : '');
+      }
+      const ui = document.getElementById('settings-user-info');
+      if (ui && currentUser) ui.textContent = 'Signed in as ' + currentUser.username + ' (' + currentUser.role + ')';
     }
-    const ui = document.getElementById('settings-user-info');
-    if (ui && currentUser) ui.textContent = 'Signed in as ' + currentUser.username + ' (' + currentUser.role + ')';
   }
   if (name === 'pricebook') renderPricebookView();
-  if (name === 'settings') renderSettings();
   if (name === 'finance') { if (isTech()) { showView('jobs'); return; } renderFinance(); }
   if (name === 'reporting') { if (isTech()) { showView('jobs'); return; } renderReporting(); }
   if (name === 'recurring') { if (isTech()) { showView('jobs'); return; } renderRecurring(); }
