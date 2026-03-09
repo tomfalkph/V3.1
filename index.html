@@ -8315,7 +8315,7 @@ function openRecurringModal(id) {
   // Populate tech checkboxes
   const box = document.getElementById('recur-tech-checkboxes');
   box.innerHTML = APP_CONFIG.techs.map(t =>
-    `<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;padding:5px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px">
+    `<label style="display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer;padding:7px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px">
       <input type="checkbox" value="${t}" style="accent-color:var(--red)"> ${t}
     </label>`
   ).join('');
@@ -9597,7 +9597,7 @@ function fpParseFiles() {
       customerId: custId,
       customerName: custNameRaw,
       description: row['Title'] || row['Subtitle'] || '',
-      status: 'completed',
+      status: invoiceStatus === 'paid' ? 'paid' : 'closed',
       jobType: 'service',
       scheduledDate: fpParseDate(row['Start Date']) || fpParseDate(row['Start Date/Time']),
       completedDate: fpParseDate(row['End Date']) || fpParseDate(row['End Date/Time']),
@@ -9742,11 +9742,13 @@ async function fpCommitImport() {
 
     job.customerId = custId;
 
-    // Archive — all FP imports go to archivedJobs (they're historical/closed)
-    state.archivedJobs.unshift(job);
+    // Add to active jobs state — they'll appear in the Closed tab (status: paid/closed)
+    state.jobs.unshift(job);
     await saveOne('jobs', job);
     imported++;
   }
+
+  localBackup();
 
   skipped = _fpPreview.length - toImport.length;
 
