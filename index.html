@@ -3848,7 +3848,9 @@ function getActiveClockIns(job) {
 // ──────────────────────────────────────────────────────────
 function renderDashboard() {
   const todayStr = today();
-  const techFilter = (isTech() && currentUser) ? (j => (j.techs||[]).includes(currentUser.username)) : () => true;
+  const techFilter = (isTech() && currentUser)
+    ? (j => { const u = currentUser.username.toLowerCase(); return (j.techs||[]).some(t => t.toLowerCase() === u); })
+    : () => true;
   const todayJobs = state.jobs.filter(j => j.scheduledDate === todayStr).filter(techFilter);
   const activeJobs = state.jobs.filter(j => j.status === 'active').filter(techFilter);
   const unpaidInvoices = state.jobs.filter(j => j.invoiceStatus === 'sent').filter(techFilter);
@@ -4783,7 +4785,8 @@ function renderJobs(keepPage) {
   const weekEnd = new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   let jobs = state.jobs;
   if (isTech() && currentUser) {
-    jobs = jobs.filter(j => (j.techs || []).includes(currentUser.username));
+    const uname = currentUser.username.toLowerCase();
+    jobs = jobs.filter(j => (j.techs || []).some(t => t.toLowerCase() === uname));
   }
   if (currentJobTab === 'active') jobs = jobs.filter(j => ['unscheduled','scheduled','active','completed'].includes(j.status));
   else if (currentJobTab === 'estimate') jobs = jobs.filter(j => j.status === 'estimate' && j.estimateStatus !== 'declined');
