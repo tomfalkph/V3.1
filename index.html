@@ -2265,12 +2265,9 @@ function applyRoleGates() {
   const role = currentUser.role;
   const isTechRole = role === 'tech';
 
-  // Gear (Settings) — admin only
+  // Gear (Settings) — visible to all roles; techs see account-only view
   const gear = document.getElementById('gear-btn');
-  if (gear) {
-    if (isTechRole) { gear.classList.remove('visible'); }
-    else { gear.classList.add('visible'); }
-  }
+  if (gear) gear.classList.add('visible');
 
   // Finance nav — admin only
   const finNav = document.getElementById('nav-finance');
@@ -3181,7 +3178,7 @@ function showView(name, btnEl) {
     if (ui && currentUser) ui.textContent = 'Signed in as ' + currentUser.username + ' (' + currentUser.role + ')';
   }
   if (name === 'pricebook') renderPricebookView();
-  if (name === 'settings') { if (isTech()) { showView('jobs'); return; } renderSettings(); }
+  if (name === 'settings') renderSettings();
   if (name === 'finance') { if (isTech()) { showView('jobs'); return; } renderFinance(); }
   if (name === 'reporting') { if (isTech()) { showView('jobs'); return; } renderReporting(); }
   if (name === 'recurring') { if (isTech()) { showView('jobs'); return; } renderRecurring(); }
@@ -8588,6 +8585,8 @@ function renderSettings(keepPage) {
           </div>
         </div>`;
     }
+    const ui = document.getElementById('settings-user-info');
+    if (ui && currentUser) ui.textContent = 'Signed in as ' + currentUser.username + ' (' + currentUser.role + ')';
     return;
   }
   const q = (document.getElementById('mat-search')?.value || '').toLowerCase();
