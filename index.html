@@ -2769,21 +2769,25 @@ async function runDiagnostics() {
   }
 
   // ── 7. STORAGE BUCKETS ───────────────────────────────────
-  // getBucket requires service role key — use list() as an anon-friendly probe.
-  // A private bucket returns an empty array or RLS error, not a "not found" error.
+  // Test each bucket by attempting a real upload of a 1-byte probe file, then deleting it.
+  // This confirms bucket exists AND the upload path is functional end-to-end.
   for (const bucket of ['job-photos', 'customer-assets']) {
     try {
-      const { error } = await sb.storage.from(bucket).list('', { limit: 1 });
-      // Any response (even RLS-blocked) means the bucket exists
-      if (!error || error.message.includes('policy') || error.statusCode === 400 || error.statusCode === 403) {
-        pass('Storage: ' + bucket + ' bucket exists ✓');
-      } else if (error.message.toLowerCase().includes('not found') || error.statusCode === 404) {
-        fail('Storage: ' + bucket + ' bucket NOT FOUND — create it in Supabase Storage', error.message);
+      const probeKey = '.diag-probe-' + Date.now();
+      const { error: upErr } = await sb.storage.from(bucket).upload(probeKey, new Blob(['1']), { upsert: true });
+      if (upErr) {
+        if (upErr.message && (upErr.message.includes('Bucket not found') || upErr.message.includes('not found'))) {
+          fail('Storage: ' + bucket + ' — bucket NOT FOUND', upErr.message);
+        } else {
+          warn('Storage: ' + bucket + ' — upload probe failed', upErr.message);
+        }
       } else {
-        pass('Storage: ' + bucket + ' bucket exists ✓ (access restricted as expected)');
+        // Upload succeeded — clean up probe file
+        await sb.storage.from(bucket).remove([probeKey]);
+        pass('Storage: ' + bucket + ' bucket writable ✓');
       }
     } catch(e) {
-      warn('Storage: could not verify ' + bucket + ' bucket', e.message);
+      warn('Storage: could not test ' + bucket, e.message);
     }
   }
 
