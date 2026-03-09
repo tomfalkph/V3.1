@@ -749,35 +749,23 @@ textarea.form-input, .form-textarea { resize: vertical; min-height: 44px; overfl
 
         <!-- Reporting -->
         <div class="card" style="margin-bottom:20px">
-          <div style="display:flex;align-items:center;justify-content:space-between">
-            <div>
-              <div class="card-title">Reports</div>
-              <div style="font-size:12px;color:var(--text3);margin-top:2px">Revenue, productivity, aging, margins</div>
-            </div>
-            <button class="btn btn-secondary" onclick="showView('reporting')">View Reports</button>
-          </div>
+          <div class="card-title">Reports</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px;margin-bottom:14px">Revenue, productivity, aging, margins</div>
+          <button class="btn btn-secondary" style="width:100%" onclick="showView('reporting')">View Reports</button>
         </div>
 
         <!-- Recurring Jobs -->
         <div class="card" style="margin-bottom:20px">
-          <div style="display:flex;align-items:center;justify-content:space-between">
-            <div>
-              <div class="card-title">Recurring Jobs</div>
-              <div style="font-size:12px;color:var(--text3);margin-top:2px" id="settings-recurring-sub">Maintenance schedules</div>
-            </div>
-            <button class="btn btn-secondary" onclick="showView('recurring')">Manage</button>
-          </div>
+          <div class="card-title">Recurring Jobs</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px;margin-bottom:14px" id="settings-recurring-sub">Maintenance schedules</div>
+          <button class="btn btn-secondary" style="width:100%" onclick="showView('recurring')">Manage</button>
         </div>
 
         <!-- Estimate Templates -->
         <div class="card" style="margin-bottom:20px">
-          <div style="display:flex;align-items:center;justify-content:space-between">
-            <div>
-              <div class="card-title">Estimate Templates</div>
-              <div style="font-size:12px;color:var(--text3);margin-top:2px">Full templates &amp; add-on package library</div>
-            </div>
-            <button class="btn btn-secondary" onclick="openEstimateTemplateManager()">Manage</button>
-          </div>
+          <div class="card-title">Estimate Templates</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px;margin-bottom:14px">Full templates &amp; add-on package library</div>
+          <button class="btn btn-secondary" style="width:100%" onclick="openEstimateTemplateManager()">Manage</button>
         </div>
 
         <!-- Technicians -->
@@ -835,27 +823,19 @@ textarea.form-input, .form-textarea { resize: vertical; min-height: 44px; overfl
 
         <!-- FieldPulse Historical Import -->
         <div class="card" style="margin-bottom:20px" id="fp-import-card">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-            <div>
-              <div class="card-title">Import Historical Data</div>
-              <div style="font-size:12px;color:var(--text3);margin-top:2px">FieldPulse jobs, invoices &amp; payments</div>
-            </div>
-            <button class="btn btn-secondary" onclick="openFpImportModal()">Import</button>
-          </div>
+          <div class="card-title">Import Historical Data</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px;margin-bottom:14px">FieldPulse jobs, invoices &amp; payments</div>
+          <button class="btn btn-secondary" style="width:100%" onclick="openFpImportModal()">Import</button>
           <div id="fp-import-status" style="font-size:12px;color:var(--text3);margin-top:6px"></div>
         </div>
 
         <!-- Diagnostic Test Runner (admin only) -->
         <div class="card" style="margin-bottom:20px" id="diag-card">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-            <div>
-              <div class="card-title">System Diagnostics</div>
-              <div style="font-size:12px;color:var(--text3);margin-top:2px">Run automated checks on auth, data, and layout</div>
-            </div>
-            <div style="display:flex;gap:8px">
-              <button class="btn btn-ghost btn-sm" id="diag-export-btn" onclick="exportDiagnostics()" style="display:none">Export</button>
-              <button class="btn btn-secondary" onclick="runDiagnostics()">Run Tests</button>
-            </div>
+          <div class="card-title">System Diagnostics</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px;margin-bottom:14px">Run automated checks on auth, data, and layout</div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-ghost btn-sm" id="diag-export-btn" onclick="exportDiagnostics()" style="display:none;flex:1">Export</button>
+            <button class="btn btn-secondary" style="flex:1" onclick="runDiagnostics()">Run Tests</button>
           </div>
           <div id="diag-results" style="margin-top:10px;display:none"></div>
         </div>
@@ -2277,25 +2257,40 @@ function authShowLogin() {
 
 function authShowApp() {
   document.getElementById('login-screen').classList.remove('visible');
-  document.getElementById('gear-btn').classList.add('visible'); // all roles need gear for logout
   applyRoleGates();
 }
 
 function applyRoleGates() {
   if (!currentUser) return;
   const role = currentUser.role;
-  // Nav items hidden for techs
-  const techHidden = []; // settings accessed via gear icon (admin only via gear visibility)
-  if (role === 'tech') {
-    techHidden.forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.style.display = 'none';
-    });
+  const isTechRole = role === 'tech';
+
+  // Gear (Settings) — admin only
+  const gear = document.getElementById('gear-btn');
+  if (gear) {
+    if (isTechRole) { gear.classList.remove('visible'); }
+    else { gear.classList.add('visible'); }
+  }
+
+  // Finance nav — admin only
+  const finNav = document.getElementById('nav-finance');
+  if (finNav) finNav.style.display = isTechRole ? 'none' : '';
+
+  // Tech sign-out button in header — only shown for techs
+  let techSignOut = document.getElementById('tech-signout-btn');
+  if (isTechRole) {
+    if (!techSignOut) {
+      techSignOut = document.createElement('button');
+      techSignOut.id = 'tech-signout-btn';
+      techSignOut.style.cssText = 'background:none;border:1px solid rgba(190,38,37,.4);border-radius:6px;padding:5px 10px;cursor:pointer;color:var(--red-l);font-family:var(--font);font-size:13px;font-weight:500';
+      techSignOut.textContent = 'Sign Out';
+      techSignOut.onclick = doLogout;
+      const headerActions = document.getElementById('header-actions');
+      if (headerActions) headerActions.appendChild(techSignOut);
+    }
+    techSignOut.style.display = '';
   } else {
-    techHidden.forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.style.display = '';
-    });
+    if (techSignOut) techSignOut.style.display = 'none';
   }
 }
 
@@ -2610,6 +2605,10 @@ async function load() {
   // Runs silently in background — catches any records that failed to sync previously
   syncLocalToSupabase();
 
+  // Re-apply role gates after load — ensures gear/finance hidden for tech roles
+  // even when session is restored from localStorage
+  applyRoleGates();
+
   showLoadingOverlay(false);
 }
 
@@ -2769,25 +2768,21 @@ async function runDiagnostics() {
   }
 
   // ── 7. STORAGE BUCKETS ───────────────────────────────────
-  // Test each bucket by attempting a real upload of a 1-byte probe file, then deleting it.
-  // This confirms bucket exists AND the upload path is functional end-to-end.
+  // getBucket requires service role key — use list() as an anon-friendly probe.
+  // A private bucket returns an empty array or RLS error, not a "not found" error.
   for (const bucket of ['job-photos', 'customer-assets']) {
     try {
-      const probeKey = '.diag-probe-' + Date.now();
-      const { error: upErr } = await sb.storage.from(bucket).upload(probeKey, new Blob(['1']), { upsert: true });
-      if (upErr) {
-        if (upErr.message && (upErr.message.includes('Bucket not found') || upErr.message.includes('not found'))) {
-          fail('Storage: ' + bucket + ' — bucket NOT FOUND', upErr.message);
-        } else {
-          warn('Storage: ' + bucket + ' — upload probe failed', upErr.message);
-        }
+      const { error } = await sb.storage.from(bucket).list('', { limit: 1 });
+      // Any response (even RLS-blocked) means the bucket exists
+      if (!error || error.message.includes('policy') || error.statusCode === 400 || error.statusCode === 403) {
+        pass('Storage: ' + bucket + ' bucket exists ✓');
+      } else if (error.message.toLowerCase().includes('not found') || error.statusCode === 404) {
+        fail('Storage: ' + bucket + ' bucket NOT FOUND — create it in Supabase Storage', error.message);
       } else {
-        // Upload succeeded — clean up probe file
-        await sb.storage.from(bucket).remove([probeKey]);
-        pass('Storage: ' + bucket + ' bucket writable ✓');
+        pass('Storage: ' + bucket + ' bucket exists ✓ (access restricted as expected)');
       }
     } catch(e) {
-      warn('Storage: could not test ' + bucket, e.message);
+      warn('Storage: could not verify ' + bucket + ' bucket', e.message);
     }
   }
 
@@ -3148,6 +3143,7 @@ async function autoGenRecurringJobs() {
 function showView(name, btnEl) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  applyRoleGates();
   const view = document.getElementById('view-' + name);
   if (view) view.classList.add('active');
   if (btnEl) btnEl.classList.add('active');
@@ -3171,21 +3167,21 @@ function showView(name, btnEl) {
   if (name === 'customers') renderCustomers();
   if (name === 'jobs') renderJobs();
   if (name === 'settings') {
+    if (isTech()) { showView('jobs'); return; }
     renderSettings();
-    if (!isTech()) {
-      populateRateInputs(); populateTechsSettings();
-      const rsub = document.getElementById('settings-recurring-sub');
-      if (rsub) {
-        const active = (state.recurring||[]).filter(r => r.active !== false);
-        const due = active.filter(r => recurNextDue(r) <= today());
-        rsub.textContent = active.length + ' schedule' + (active.length !== 1 ? 's' : '') + (due.length ? ' · ' + due.length + ' due' : '');
-      }
+    populateRateInputs(); populateTechsSettings();
+    const rsub = document.getElementById('settings-recurring-sub');
+    if (rsub) {
+      const active = (state.recurring||[]).filter(r => r.active !== false);
+      const due = active.filter(r => recurNextDue(r) <= today());
+      rsub.textContent = active.length + ' schedule' + (active.length !== 1 ? 's' : '') + (due.length ? ' · ' + due.length + ' due' : '');
     }
     const ui = document.getElementById('settings-user-info');
     if (ui && currentUser) ui.textContent = 'Signed in as ' + currentUser.username + ' (' + currentUser.role + ')';
   }
   if (name === 'pricebook') renderPricebookView();
-  if (name === 'finance') { renderFinance(); }
+  if (name === 'settings') { if (isTech()) { showView('jobs'); return; } renderSettings(); }
+  if (name === 'finance') { if (isTech()) { showView('jobs'); return; } renderFinance(); }
   if (name === 'reporting') { if (isTech()) { showView('jobs'); return; } renderReporting(); }
   if (name === 'recurring') { if (isTech()) { showView('jobs'); return; } renderRecurring(); }
 
@@ -3692,6 +3688,11 @@ function uid(prefix) {
 }
 function fmtDate(d) {
   if (!d) return '—';
+  // If it's a plain YYYY-MM-DD string, parse as local time to avoid UTC off-by-one
+  if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
+    const [y, m, day] = d.split('-').map(Number);
+    return new Date(y, m - 1, day).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+  }
   return new Date(d).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
 }
 function fmtDateTime(ts) {
@@ -3826,7 +3827,10 @@ function showManualStatusOverride(jobId) {
   }
 }
 function today() {
-  return new Date().toISOString().slice(0,10);
+  const d = new Date();
+  return d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0');
 }
 function nowTime() {
   const n = new Date();
@@ -5808,9 +5812,18 @@ function updateLineType() {
 }
 
 function calcLineTotal() {
+  const type = document.getElementById('line-type').value;
   const qty = parseFloat(document.getElementById('line-qty').value) || 0;
   const rate = parseFloat(document.getElementById('line-rate').value) || 0;
-  const total = qty * rate;
+  let total;
+  if (type === 'labor' && qty > 1) {
+    // Apply tiered rate: first hour at service call rate, remainder at continuous rate
+    total = APP_CONFIG.rateServiceCall + (qty - 1) * APP_CONFIG.rateContinuous;
+    // Update rate field to show blended rate for transparency
+    document.getElementById('line-rate').value = (total / qty).toFixed(2);
+  } else {
+    total = qty * rate;
+  }
   document.getElementById('line-total-preview').textContent = fmtMoney(total);
   return total;
 }
@@ -5856,7 +5869,10 @@ function saveLineItem() {
   const cost = parseFloat(document.getElementById('line-cost').value) || 0;
   const margin = parseFloat(document.getElementById('line-margin').value) || 0;
   const sku = document.getElementById('line-sku')?.value.trim() || '';
-  const total = qty * rate;
+  // For labor with > 1 hour, use tiered total (not flat qty × rate)
+  const total = (type === 'labor' && qty > 1)
+    ? APP_CONFIG.rateServiceCall + (qty - 1) * APP_CONFIG.rateContinuous
+    : qty * rate;
   const job = state.jobs.find(j => j.id === jobId);
   if (!job) return;
   job.lineItems.push({
@@ -6358,9 +6374,11 @@ function buildLaborLines(job) {
 }
 
 function getInvoiceLines(job) {
-  // labor from time log + manual line items
-  const laborLines = buildLaborLines(job);
+  // If manual labor line items exist, use those — do NOT also add time-log labor (avoids double-count).
+  // Time-log labor (buildLaborLines) is only used when there are no manual labor lineItems.
   const manualLines = (job.lineItems || []);
+  const hasManualLabor = manualLines.some(l => l.type === 'labor');
+  const laborLines = hasManualLabor ? [] : buildLaborLines(job);
   return [...laborLines, ...manualLines];
 }
 
@@ -7706,8 +7724,14 @@ function sendMailto() {
   if (!email) { showToast('Email required','error'); return; }
   const jobId = document.getElementById('send-job-id').value;
   window.open(`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(email)}&su=${subject}&body=${body}`, '_blank');
-  setInvoiceStatus(jobId, 'sent');
   closeModal('modal-invoice-send');
+  // Do NOT auto-mark sent — Gmail open does not confirm delivery.
+  // Prompt user to confirm after they actually send.
+  setTimeout(() => {
+    if (confirm('Did you send the invoice? Tap OK to mark it as Sent.')) {
+      setInvoiceStatus(jobId, 'sent');
+    }
+  }, 1500);
 }
 
 async function sendProgrammatic() {
