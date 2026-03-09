@@ -614,7 +614,7 @@ textarea.form-input, .form-textarea { resize: vertical; min-height: 44px; overfl
     <span id="logo-text" style="display:none;font-weight:700;font-size:15px;color:var(--red)">TOM FALK P&H</span>
     <span class="page-title" id="page-title">Dashboard</span>
     <div class="header-actions" id="header-actions"></div>
-    <button id="gear-btn" onclick="showView('settings')" title="Settings" style="background:none;border:none;padding:6px;cursor:pointer;color:var(--text2);display:none;align-items:center;justify-content:center">
+    <button id="gear-btn" onclick="currentView==='settings'?showView('dashboard'):showView('settings')" title="Settings" style="background:none;border:none;padding:6px;cursor:pointer;color:var(--text2);display:none;align-items:center;justify-content:center">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06-.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
     </button>
   </div>
@@ -852,7 +852,10 @@ textarea.form-input, .form-textarea { resize: vertical; min-height: 44px; overfl
               <div class="card-title">System Diagnostics</div>
               <div style="font-size:12px;color:var(--text3);margin-top:2px">Run automated checks on auth, data, and layout</div>
             </div>
-            <button class="btn btn-secondary" onclick="runDiagnostics()">Run Tests</button>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-ghost btn-sm" id="diag-export-btn" onclick="exportDiagnostics()" style="display:none">Export</button>
+              <button class="btn btn-secondary" onclick="runDiagnostics()">Run Tests</button>
+            </div>
           </div>
           <div id="diag-results" style="margin-top:10px;display:none"></div>
         </div>
@@ -1180,7 +1183,7 @@ textarea.form-input, .form-textarea { resize: vertical; min-height: 44px; overfl
 <div class="modal-overlay" id="modal-fp-import">
   <div class="modal" style="max-height:90dvh;overflow-y:auto">
     <div class="modal-handle"></div>
-    <div class="modal-title">Import FieldPulse History</div>
+    <div class="modal-title" onclick="closeModal('modal-fp-import')" style="cursor:pointer" title="Tap to close">Import FieldPulse History</div>
 
     <!-- Step 1: File uploads -->
     <div id="fp-step-upload">
@@ -1256,6 +1259,10 @@ textarea.form-input, .form-textarea { resize: vertical; min-height: 44px; overfl
 <div class="modal-overlay" id="modal-csv-import">
   <div class="modal">
     <div class="modal-handle"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+      <div class="modal-title" style="margin-bottom:0">Import Customers</div>
+      <button onclick="closeModal('modal-csv-import')" style="background:none;border:none;color:var(--text2);font-size:20px;line-height:1;padding:4px;cursor:pointer">✕</button>
+    </div>
     <div class="modal-title">Import Customers</div>
     <div id="csv-import-status" style="font-size:13px;color:var(--text2);margin-bottom:14px"></div>
     <div id="csv-import-preview" style="max-height:240px;overflow-y:auto;margin-bottom:14px"></div>
@@ -1269,12 +1276,12 @@ textarea.form-input, .form-textarea { resize: vertical; min-height: 44px; overfl
 </div><!-- /app -->
 
 <!-- FLOATING CALC -->
-<button id="calc-fab" onclick="openCalc()">
+<button id="calc-fab" onclick="document.getElementById('modal-calc').classList.contains('open')?closeModal('modal-calc'):openCalc()">
   <svg viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="10" y2="10"/><line x1="14" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="10" y2="14"/><line x1="14" y1="14" x2="16" y2="14"/><line x1="8" y1="18" x2="10" y2="18"/><line x1="14" y1="18" x2="16" y2="18"/></svg>
 </button>
 
 <!-- FLOATING CALENDAR -->
-<button id="cal-fab" onclick="openCalendarModal()">
+<button id="cal-fab" onclick="document.getElementById('modal-calendar').classList.contains('open')?closeModal('modal-calendar'):openCalendarModal()">
   <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
 </button>
 
@@ -2011,7 +2018,7 @@ textarea.form-input, .form-textarea { resize: vertical; min-height: 44px; overfl
 <div class="modal-overlay" id="modal-calc">
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-title">Field Pricing Calculator</div>
+    <div class="modal-title" onclick="closeModal('modal-calc')" style="cursor:pointer" title="Close">Field Pricing Calculator</div>
 
     <div class="toggle-row" style="padding:0 0 14px">
       <span class="toggle-label">Maintenance Plan Customer</span>
@@ -2810,12 +2817,12 @@ async function runDiagnostics() {
   }
 
   // ── 10. MONEY MATH ───────────────────────────────────────
-  // calcDuration: 9:00 → 10:30 = 90 mins
+  // calcDuration: 9:00 → 10:30 = 90 mins (returns {hrs, label})
   const dur = calcDuration('09:00', '10:30');
-  if (dur === 90) {
+  if (dur && Math.abs(dur.hrs * 60 - 90) < 0.01) {
     pass('Math: calcDuration 9:00→10:30 = 90 min ✓');
   } else {
-    fail('Math: calcDuration wrong', 'got ' + dur + ' min, expected 90');
+    fail('Math: calcDuration wrong', 'got ' + (dur ? dur.hrs * 60 : dur) + ' min, expected 90');
   }
 
   // totalHours: one 90-min entry = 1.5 hrs
@@ -2826,29 +2833,22 @@ async function runDiagnostics() {
     fail('Math: totalHours wrong', 'got ' + th + ', expected 1.5');
   }
 
-  // buildLaborLines: 1.5hrs → service call (1hr @$202) + continuous (0.5hr @$182)
+  // buildLaborLines: 1.5hrs (no tech) → 1 combined line with service call + continuous split
   const testJob = {
     timeLog: [{ clockIn: '09:00', clockOut: '10:30', clockInDate: today(), date: today() }],
     lineItems: [], history: [], payments: [], status: 'active'
   };
   const laborLines = buildLaborLines(testJob);
-  if (laborLines.length === 2) {
-    const scLine = laborLines[0];
-    const coLine = laborLines[1];
-    const scExpected = APP_CONFIG.rateServiceCall * 1;
-    const coExpected = APP_CONFIG.rateContinuous * 0.5;
-    if (Math.abs(scLine.total - scExpected) < 0.01) {
-      pass('Math: service call line $' + scExpected + ' ✓');
+  if (laborLines.length === 1) {
+    const line = laborLines[0];
+    const expectedTotal = APP_CONFIG.rateServiceCall * 1 + APP_CONFIG.rateContinuous * 0.5;
+    if (Math.abs(line.total - expectedTotal) < 0.01) {
+      pass('Math: buildLaborLines 1.5hr → $' + expectedTotal.toFixed(2) + ' combined ✓');
     } else {
-      fail('Math: service call line wrong', 'got $' + scLine.total + ', expected $' + scExpected);
-    }
-    if (Math.abs(coLine.total - coExpected) < 0.01) {
-      pass('Math: continuous line $' + coExpected + ' ✓');
-    } else {
-      fail('Math: continuous line wrong', 'got $' + coLine.total + ', expected $' + coExpected);
+      fail('Math: buildLaborLines total wrong', 'got $' + line.total + ', expected $' + expectedTotal.toFixed(2));
     }
   } else {
-    fail('Math: buildLaborLines returned ' + laborLines.length + ' lines, expected 2');
+    fail('Math: buildLaborLines returned ' + laborLines.length + ' lines, expected 1');
   }
 
   // ── 11. MARGIN MATH ──────────────────────────────────────
@@ -3039,6 +3039,22 @@ async function runDiagnostics() {
       </div>
     </div>`;
   }).join('');
+
+  window._lastDiagResults = { results, passCount, failCount, warnCount };
+  const exportBtn = document.getElementById('diag-export-btn');
+  if (exportBtn) exportBtn.style.display = '';
+}
+
+function exportDiagnostics() {
+  const d = window._lastDiagResults;
+  if (!d) { showToast('Run tests first', 'error'); return; }
+  const ts = new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const header = ['Tom Falk CRM — System Diagnostics', 'Run: ' + ts, 'Result: ' + d.failCount + ' failed · ' + d.passCount + ' passed · ' + d.warnCount + ' warnings', '─'.repeat(52)].join('\n');
+  const rows = d.results.map(r => { const icon = r.ok === true ? '✓' : r.ok === false ? '✗' : '⚠'; return icon + ' ' + r.label + (r.note ? '  [' + r.note + ']' : ''); }).join('\n');
+  const blob = new Blob([header + '\n\n' + rows + '\n'], { type: 'text/plain' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'tomfalk-diag-' + new Date().toISOString().slice(0,10) + '.txt';
+  a.click(); URL.revokeObjectURL(a.href);
 }
 
 // ── AUTO-GEN RECURRING JOBS ───────────────────────────────
@@ -7828,7 +7844,7 @@ function populateTechsSettings() {
   list.innerHTML = APP_CONFIG.techs.map((t, i) => `
     <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
       <span style="font-size:14px">${t}</span>
-      <button style="background:none;border:none;color:var(--red-l);font-size:13px;cursor:pointer;padding:2px 6px" onclick="removeTech(${i})">Remove</button>
+      <button class="btn btn-sm btn-ghost" style="color:var(--red-l)" onclick="removeTech(${i})">Remove</button>
     </div>`).join('');
 }
 
@@ -8548,7 +8564,7 @@ function renderSettings(keepPage) {
       .join('') +
       (matHasMore
         ? `<div style="text-align:center;padding:16px 0">
-            <button onclick="matPage++;renderSettings(true)" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:8px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font)">
+            <button class="btn btn-ghost btn-sm" onclick="matPage++;renderSettings(true)">
               Load More <span style="color:var(--text3)">(${matTotal - matSlice.length} remaining)</span>
             </button>
            </div>`
@@ -9186,89 +9202,112 @@ function handleCsvImport(event) {
       header: true,
       skipEmptyLines: true,
       complete: function(results) {
-      csvImportRows = [];
-      const errors = [];
-      const preview = [];
+        csvImportRows = [];
+        const errors = [];
+        const preview = [];
 
-      results.data.forEach((row, i) => {
-        const firstName = (row['First Name'] || '').trim();
-        const lastName = (row['Last Name'] || '').trim();
-        const company = (row['Company Name'] || '').trim();
-        const displayName = (row['Display Name'] || '').trim();
-        const name = displayName || company || [firstName, lastName].filter(Boolean).join(' ');
+        // Normalise a header for loose matching
+        const norm = h => (h || '').toLowerCase().replace(/[\s_\-\.\/\(\)#]+/g, '');
 
-        const phone = (row['Phone Number'] || row['Alternate Phone Number'] || row['Phone'] || row['Mobile'] || row['Cell'] || row['phone'] || '').trim();
-        const email = (row['Email'] || row['email'] || '').trim();
+        // Return first non-empty value from row using ordered candidate list
+        const pick = (row, candidates) => {
+          const keys = Object.keys(row);
+          const normKeys = keys.map(k => ({ k, n: norm(k) }));
+          for (const pat of candidates) {
+            const n = norm(pat);
+            const hit = normKeys.find(x => x.n === n);
+            if (hit) { const v = (row[hit.k] || '').toString().trim(); if (v && v !== '-') return v; }
+          }
+          // Partial fallback
+          for (const pat of candidates) {
+            const n = norm(pat);
+            const hit = normKeys.find(x => x.n.includes(n) || n.includes(x.n));
+            if (hit) { const v = (row[hit.k] || '').toString().trim(); if (v && v !== '-') return v; }
+          }
+          return '';
+        };
 
-        const addr1 = (row['Address Line 1'] || '').trim();
-        const addr2 = (row['Address Line 2'] || '').trim();
-        const city  = (row['City'] || '').trim();
-        const state = (row['State'] || '').trim();
-        const zip   = (row['Zip Code'] || '').trim();
-        const address = [addr1, addr2, city, state, zip].filter(Boolean).join(', ');
+        const headers = results.meta.fields || [];
+        console.log('[CSV Import] headers:', headers);
 
-        const billAddr1 = (row['Billing Address Line 1'] || '').trim();
-        const billAddr2 = (row['Billing Address Line 2'] || '').trim();
-        const billCity  = (row['Billing City'] || '').trim();
-        const billState = (row['Billing State'] || '').trim();
-        const billZip   = (row['Billing Zip Code'] || '').trim();
-        const billing = [billAddr1, billAddr2, billCity, billState, billZip].filter(Boolean).join(', ');
+        results.data.forEach((row, i) => {
+          // ── Name (FieldPulse uses "Customer Display Name", "Customer First name", "Customer Last Name")
+          const displayName = pick(row, ['Customer Display Name','Display Name','DisplayName','Name','Full Name','FullName','Customer Name','CustomerName','Contact Name']);
+          const company     = pick(row, ['Customer Company Name','Company Name','CompanyName','Company','Business Name','Organization']);
+          const firstName   = pick(row, ['Customer First name','Customer First Name','First Name','FirstName','First','Given Name']);
+          const lastName    = pick(row, ['Customer Last Name','Customer Last name','Last Name','LastName','Last','Surname','Family Name']);
+          const name = displayName || company || [firstName, lastName].filter(Boolean).join(' ');
 
-        const notes = (row['Notes'] || row['notes'] || '').trim();
-        const maintenancePlan = !!(row['HVAC Agreement'] || '').trim();
+          // ── Phone (FieldPulse: "Customer Phone")
+          const phone = pick(row, [
+            'Customer Phone','Customer Phone 2','Phone Number','Phone','Mobile Phone','Mobile',
+            'Cell','Cell Phone','Home Phone','Work Phone','Primary Phone','Contact Phone','phone'
+          ]);
 
-        if (!name) { errors.push(`Row ${i+2}: missing name — skipped`); return; }
+          // ── Email
+          const email = pick(row, ['Customer Email','Customer Email 2','Email','Email Address','EmailAddress','E-mail','email']);
 
-        const exists = (state.customers || []).find(c =>
-          c.name.toLowerCase() === name.toLowerCase() &&
-          (c.phone === phone || (!c.phone && !phone))
-        );
+          // ── Address (FieldPulse: "Location Address","City","State","Zip Code")
+          const addr   = pick(row, ['Location Address','Address Line 1','Address1','Street Address','Street','Service Address','Billing Address']);
+          const city   = pick(row, ['City','Location City','Billing City','Service City']);
+          const st     = pick(row, ['State','Location State','Billing State','Province']);
+          const zip    = pick(row, ['Zip Code','Zip','Location Zip','Billing Zip','Postal Code','PostalCode']);
+          const address = [addr, city, st, zip].filter(Boolean).join(', ');
 
-        csvImportRows.push({ name, phone, email, address, billing, notes, maintenancePlan, exists: !!exists });
-        preview.push({ name, phone, email, address, exists: !!exists });
-      });
+          // ── Notes
+          const notes = pick(row, ['Customer Notes','Customer Job Notes','Notes','Note','Comments','Field Notes','Description','Memo']);
 
-      const newCount = preview.filter(r => !r.exists).length;
-      const skipCount = preview.filter(r => r.exists).length;
+          // ── Maintenance plan (FieldPulse: "HVAC Agreement" = "None" or a value)
+          const hvac = pick(row, ['HVAC Agreement','Maintenance Plan','Service Agreement','Agreement','Plan']);
+          const maintenancePlan = !!(hvac && hvac.toLowerCase() !== 'none' && hvac !== '0' && hvac !== 'false');
 
-      document.getElementById('csv-import-status').innerHTML = `
-        <span style="color:var(--green)">${newCount} new</span> &nbsp;·&nbsp;
-        <span style="color:var(--text3)">${skipCount} already exist (will skip)</span>
-        ${errors.length ? `<br><span style="color:var(--red-l)">${errors.join('<br>')}</span>` : ''}
-      `;
+          if (!name) { errors.push('Row ' + (i + 2) + ': no name found — skipped'); return; }
 
-      document.getElementById('csv-import-preview').innerHTML = preview.length ? `
-        <table style="width:100%;font-size:12px;border-collapse:collapse">
-          <thead>
-            <tr style="color:var(--text3);font-size:11px;text-transform:uppercase;letter-spacing:.5px">
-              <th style="text-align:left;padding:4px 6px">Name</th>
-              <th style="text-align:left;padding:4px 6px">Phone</th>
-              <th style="text-align:left;padding:4px 6px">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${preview.map(r => `
-              <tr style="border-top:1px solid var(--border)">
-                <td style="padding:6px;color:${r.exists?'var(--text3)':'var(--text)'}">${r.name}</td>
-                <td style="padding:6px;color:var(--text2)">${r.phone||'—'}</td>
-                <td style="padding:6px">${r.exists
-                  ? '<span style="color:var(--text3);font-size:11px">Skip</span>'
-                  : '<span style="color:var(--green);font-size:11px;font-weight:600">New</span>'
-                }</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      ` : '<div style="color:var(--text3);font-size:13px">No valid rows found.</div>';
+          // Deduplicate against existing customers
+          const exists = (state.customers || []).find(c =>
+            c.name.toLowerCase() === name.toLowerCase() &&
+            (!phone || !c.phone || c.phone.replace(/\D/g,'') === phone.replace(/\D/g,''))
+          );
 
-      const confirmBtn = document.getElementById('csv-import-confirm-btn');
-      confirmBtn.style.display = newCount > 0 ? 'inline-flex' : 'none';
-      confirmBtn.textContent = `Import ${newCount} Customer${newCount !== 1 ? 's' : ''}`;
+          csvImportRows.push({ name, phone, email, address, billing: '', notes, maintenancePlan, exists: !!exists });
+          preview.push({ name, phone, email, address, exists: !!exists });
+        });
 
-      console.log('CSV parsed:', newCount, 'new,', skipCount, 'skip');
-      setTimeout(() => openModal('modal-csv-import'), 0);
-    },
-    error: function(err) { showToast('Failed to parse CSV: ' + err.message,'error'); }
+        const newCount  = preview.filter(r => !r.exists).length;
+        const skipCount = preview.filter(r =>  r.exists).length;
+        const detectedSample = headers.slice(0, 6).join(', ') + (headers.length > 6 ? '…' : '');
+
+        document.getElementById('csv-import-status').innerHTML =
+          '<span style="color:var(--green)">' + newCount + ' new</span> &nbsp;·&nbsp; ' +
+          '<span style="color:var(--text3)">' + skipCount + ' already exist (will skip)</span>' +
+          (errors.length ? '<br><span style="color:var(--red-l)">' + errors.join('<br>') + '</span>' : '') +
+          '<br><span style="font-size:11px;color:var(--text3)">Columns: ' + detectedSample + '</span>';
+
+        document.getElementById('csv-import-preview').innerHTML = preview.length
+          ? '<table style="width:100%;font-size:12px;border-collapse:collapse">' +
+            '<thead><tr style="color:var(--text3);font-size:11px;text-transform:uppercase;letter-spacing:.5px">' +
+            '<th style="text-align:left;padding:4px 6px">Name</th>' +
+            '<th style="text-align:left;padding:4px 6px">Phone</th>' +
+            '<th style="text-align:left;padding:4px 6px">Status</th></tr></thead><tbody>' +
+            preview.map(r =>
+              '<tr style="border-top:1px solid var(--border)">' +
+              '<td style="padding:6px;color:' + (r.exists ? 'var(--text3)' : 'var(--text)') + '">' + r.name + '</td>' +
+              '<td style="padding:6px;color:var(--text2)">' + (r.phone || '—') + '</td>' +
+              '<td style="padding:6px">' + (r.exists
+                ? '<span style="color:var(--text3);font-size:11px">Skip</span>'
+                : '<span style="color:var(--green);font-size:11px;font-weight:600">New</span>') +
+              '</td></tr>'
+            ).join('') + '</tbody></table>'
+          : '<div style="color:var(--text3);font-size:13px">No valid rows found. Check console for column names.</div>';
+
+        const confirmBtn = document.getElementById('csv-import-confirm-btn');
+        confirmBtn.style.display = newCount > 0 ? 'inline-flex' : 'none';
+        confirmBtn.textContent = 'Import ' + newCount + ' Customer' + (newCount !== 1 ? 's' : '');
+
+        console.log('[CSV Import]', newCount, 'new,', skipCount, 'skip');
+        setTimeout(() => openModal('modal-csv-import'), 0);
+      },
+      error: function(err) { showToast('Failed to parse CSV: ' + err.message, 'error'); }
     });
   };
   reader.readAsText(file);
