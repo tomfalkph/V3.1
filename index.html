@@ -748,23 +748,23 @@ textarea.form-input, .form-textarea { resize: vertical; min-height: 44px; overfl
       <div style="padding:16px">
 
         <!-- Reporting -->
-        <div class="card" style="margin-bottom:20px">
-          <div class="card-title">Reports</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:2px;margin-bottom:14px">Revenue, productivity, aging, margins</div>
+        <div class="card" style="margin-bottom:12px;padding:18px">
+          <div class="card-title" style="margin-bottom:6px">Reports</div>
+          <div style="font-size:13px;color:var(--text3);margin-bottom:16px">Revenue, productivity, aging, margins</div>
           <button class="btn btn-secondary" style="width:100%" onclick="showView('reporting')">View Reports</button>
         </div>
 
         <!-- Recurring Jobs -->
-        <div class="card" style="margin-bottom:20px">
-          <div class="card-title">Recurring Jobs</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:2px;margin-bottom:14px" id="settings-recurring-sub">Maintenance schedules</div>
+        <div class="card" style="margin-bottom:12px;padding:18px">
+          <div class="card-title" style="margin-bottom:6px">Recurring Jobs</div>
+          <div style="font-size:13px;color:var(--text3);margin-bottom:16px" id="settings-recurring-sub">Maintenance schedules</div>
           <button class="btn btn-secondary" style="width:100%" onclick="showView('recurring')">Manage</button>
         </div>
 
         <!-- Estimate Templates -->
-        <div class="card" style="margin-bottom:20px">
-          <div class="card-title">Estimate Templates</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:2px;margin-bottom:14px">Full templates &amp; add-on package library</div>
+        <div class="card" style="margin-bottom:12px;padding:18px">
+          <div class="card-title" style="margin-bottom:6px">Estimate Templates</div>
+          <div style="font-size:13px;color:var(--text3);margin-bottom:16px">Full templates &amp; add-on package library</div>
           <button class="btn btn-secondary" style="width:100%" onclick="openEstimateTemplateManager()">Manage</button>
         </div>
 
@@ -822,17 +822,17 @@ textarea.form-input, .form-textarea { resize: vertical; min-height: 44px; overfl
         <div id="mat-list"></div>
 
         <!-- FieldPulse Historical Import -->
-        <div class="card" style="margin-bottom:20px" id="fp-import-card">
-          <div class="card-title">Import Historical Data</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:2px;margin-bottom:14px">FieldPulse jobs, invoices &amp; payments</div>
+        <div class="card" style="margin-bottom:12px;padding:18px" id="fp-import-card">
+          <div class="card-title" style="margin-bottom:6px">Import Historical Data</div>
+          <div style="font-size:13px;color:var(--text3);margin-bottom:16px">FieldPulse jobs, invoices &amp; payments</div>
           <button class="btn btn-secondary" style="width:100%" onclick="openFpImportModal()">Import</button>
-          <div id="fp-import-status" style="font-size:12px;color:var(--text3);margin-top:6px"></div>
+          <div id="fp-import-status" style="font-size:12px;color:var(--text3);margin-top:8px"></div>
         </div>
 
         <!-- Diagnostic Test Runner (admin only) -->
-        <div class="card" style="margin-bottom:20px" id="diag-card">
-          <div class="card-title">System Diagnostics</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:2px;margin-bottom:14px">Run automated checks on auth, data, and layout</div>
+        <div class="card" style="margin-bottom:12px;padding:18px" id="diag-card">
+          <div class="card-title" style="margin-bottom:6px">System Diagnostics</div>
+          <div style="font-size:13px;color:var(--text3);margin-bottom:16px">Run automated checks on auth, data, and layout</div>
           <div style="display:flex;gap:8px">
             <button class="btn btn-ghost btn-sm" id="diag-export-btn" onclick="exportDiagnostics()" style="display:none;flex:1">Export</button>
             <button class="btn btn-secondary" style="flex:1" onclick="runDiagnostics()">Run Tests</button>
@@ -8067,10 +8067,18 @@ function renderReporting() {
   allJobs.forEach(j => {
     if (!['paid','closed','invoiced'].includes(j.status)) return;
     totalRevenue += getInvoiceTotal(j);
+    // Labor cost: always use actual clocked hours when available (pricebook flat-rate jobs
+    // may have a labor line item with estimated qty, but actual hours are in the time log)
+    const clockedHrs = (j.timeLog || []).reduce((sum, e) => {
+      const d = calcDuration(e.clockIn, e.clockOut);
+      return sum + (d ? d.hrs : 0);
+    }, 0);
+    const laborLineQty = (j.lineItems || []).filter(li => li.type === 'labor')
+      .reduce((sum, li) => sum + (li.qty || 0), 0);
+    const actualLaborHrs = clockedHrs > 0 ? clockedHrs : laborLineQty;
+    totalLaborCost += actualLaborHrs * LABOR_COST;
     (j.lineItems || []).forEach(li => {
-      if (li.type === 'labor') {
-        totalLaborCost += (li.qty || 0) * LABOR_COST;
-      } else if (li.type === 'material') {
+      if (li.type === 'material') {
         const cost = li.cost || (li.rate ? li.rate / (1 + 0.4) : 0);
         totalMaterialCost += cost * (li.qty || 1);
         totalMaterialSell += (li.total || 0);
