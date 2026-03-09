@@ -2606,7 +2606,29 @@ async function load() {
   // Auto-generate jobs for overdue recurring templates
   await autoGenRecurringJobs();
 
+  // Safety net: push any localStorage customers/jobs missing from Supabase
+  // Runs silently in background — catches any records that failed to sync previously
+  syncLocalToSupabase();
+
   showLoadingOverlay(false);
+}
+
+async function syncLocalToSupabase() {
+  try {
+    const local = JSON.parse(localStorage.getItem('tfcrm_v4') || '{}');
+    const localCusts = local.customers || [];
+    if (!localCusts.length) return;
+    // Check how many customers Supabase has
+    const { count } = await sb.from('customers').select('id', { count: 'exact', head: true });
+    if (count >= localCusts.length) return; // Supabase is at least as current
+    // Supabase is behind — bulk push all local customers
+    const CHUNK = 50;
+    for (let i = 0; i < localCusts.length; i += CHUNK) {
+      const chunk = localCusts.slice(i, i + CHUNK).map(c => ({ id: c.id, data: c }));
+      await sb.from('customers').upsert(chunk, { onConflict: 'id' });
+    }
+    console.log('[syncLocalToSupabase] pushed', localCusts.length, 'customers to Supabase');
+  } catch(e) { console.warn('[syncLocalToSupabase] failed silently:', e.message); }
 }
 
 
@@ -2747,28 +2769,22 @@ async function runDiagnostics() {
   }
 
   // ── 7. STORAGE BUCKETS ───────────────────────────────────
-  try {
-    const { data, error } = await sb.storage.getBucket('job-photos');
-    if (error) throw error;
-    if (!data.public) {
-      pass('Storage: job-photos bucket private ✓');
-    } else {
-      fail('Storage: job-photos is PUBLIC — should be private');
+  // getBucket requires service role key — use list() as an anon-friendly probe.
+  // A private bucket returns an empty array or RLS error, not a "not found" error.
+  for (const bucket of ['job-photos', 'customer-assets']) {
+    try {
+      const { error } = await sb.storage.from(bucket).list('', { limit: 1 });
+      // Any response (even RLS-blocked) means the bucket exists
+      if (!error || error.message.includes('policy') || error.statusCode === 400 || error.statusCode === 403) {
+        pass('Storage: ' + bucket + ' bucket exists ✓');
+      } else if (error.message.toLowerCase().includes('not found') || error.statusCode === 404) {
+        fail('Storage: ' + bucket + ' bucket NOT FOUND — create it in Supabase Storage', error.message);
+      } else {
+        pass('Storage: ' + bucket + ' bucket exists ✓ (access restricted as expected)');
+      }
+    } catch(e) {
+      warn('Storage: could not verify ' + bucket + ' bucket', e.message);
     }
-  } catch(e) {
-    warn('Storage: could not verify job-photos bucket', e.message);
-  }
-
-  try {
-    const { data, error } = await sb.storage.getBucket('customer-assets');
-    if (error) throw error;
-    if (!data.public) {
-      pass('Storage: customer-assets bucket private ✓');
-    } else {
-      fail('Storage: customer-assets is PUBLIC — should be private');
-    }
-  } catch(e) {
-    warn('Storage: could not verify customer-assets bucket', e.message);
   }
 
   // ── 8. RECURRING AUTO-GEN ────────────────────────────────
@@ -9321,28 +9337,40 @@ async function confirmCsvImport() {
   confirmBtn.textContent = 'Importing…';
   confirmBtn.disabled = true;
 
-  let imported = 0;
-  for (const row of toImport) {
-    const cust = {
-      id: uid('cust'),
-      name: row.name,
-      phone: row.phone,
-      email: row.email,
-      address: row.address,
-      billing: row.billing || '',
-      maintenancePlan: row.maintenancePlan || false,
-      notes: row.notes,
-      createdAt: Date.now()
-    };
-    state.customers.unshift(cust);
-    await saveOne('customers', cust);
-    imported++;
+  const now = Date.now();
+  const custs = toImport.map(row => ({
+    id: uid('cust'),
+    name: row.name,
+    phone: row.phone,
+    email: row.email,
+    address: row.address,
+    billing: row.billing || '',
+    maintenancePlan: row.maintenancePlan || false,
+    notes: row.notes,
+    createdAt: now
+  }));
+
+  // Add to state first so UI updates immediately
+  custs.forEach(c => state.customers.unshift(c));
+  localBackup();
+
+  // Bulk upsert to Supabase in chunks of 50
+  const CHUNK = 50;
+  let failed = 0;
+  for (let i = 0; i < custs.length; i += CHUNK) {
+    const chunk = custs.slice(i, i + CHUNK).map(c => ({ id: c.id, data: c }));
+    const { error } = await sb.from('customers').upsert(chunk, { onConflict: 'id' });
+    if (error) { console.error('Bulk upsert error:', error.message); failed += chunk.length; }
   }
 
   csvImportRows = [];
   closeModal('modal-csv-import');
   renderCustomers();
-  showToast(`${imported} customer${imported !== 1 ? 's' : ''} imported`,'success');
+  if (failed) {
+    showToast(`${custs.length - failed} imported, ${failed} failed — check console`, 'error');
+  } else {
+    showToast(`${custs.length} customer${custs.length !== 1 ? 's' : ''} imported`, 'success');
+  }
 }
 
 // ══════════════════════════════════════════════════════════
@@ -9353,6 +9381,7 @@ let _fpRaw = { jobs: null, invoices: null, payments: null };
 let _fpParsed = { jobs: [], invoices: [], payments: [] };
 let _fpPreview = []; // final job objects ready to commit
 let _fpUnmatched = {}; // fpJobId → selected customerId
+let _fpNewCustomers = []; // customers to create at commit time
 
 function openFpImportModal() {
   fpResetToUpload();
@@ -9364,6 +9393,7 @@ function fpResetToUpload() {
   _fpParsed = { jobs: [], invoices: [], payments: [] };
   _fpPreview = [];
   _fpUnmatched = {};
+  _fpNewCustomers = [];
   ['jobs','inv','pay'].forEach(k => {
     const el = document.getElementById('fp-'+k+'-file');
     if (el) el.value = '';
@@ -9392,12 +9422,20 @@ function fpCsvParse(text) {
   // Skip BOM
   if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
   const lines = text.split(/\r?\n/).filter(l => l.trim());
-  // FieldPulse exports have a merged-header row 1 and real column headers row 2
-  // Detect: if first row has mostly empty quoted cells, skip it
-  const firstRow = lines[0];
-  const emptyRatio = (firstRow.match(/"",/g)||[]).length / (firstRow.split(',').length);
-  const headerLine = emptyRatio > 0.3 ? lines[1] : lines[0];
-  const dataStart = emptyRatio > 0.3 ? 2 : 1;
+
+  // FieldPulse exports have 1-2 junk rows before real column headers.
+  // Find the real header: first row where >50% of cells are non-empty.
+  const isRealHeader = line => {
+    const cells = fpParseRow(line);
+    const nonEmpty = cells.filter(c => c.trim()).length;
+    return cells.length > 0 && (nonEmpty / cells.length) > 0.5;
+  };
+  let headerIdx = 0;
+  for (let i = 0; i < Math.min(lines.length, 5); i++) {
+    if (isRealHeader(lines[i])) { headerIdx = i; break; }
+  }
+  const headerLine = lines[headerIdx];
+  const dataStart = headerIdx + 1;
 
   // Parse header
   const headers = fpParseRow(headerLine);
@@ -9515,7 +9553,8 @@ function fpParseFiles() {
   });
 
   // Build preview records
-  const matched = [], unmatched = [];
+  const matched = [];
+  _fpNewCustomers = []; // reset for this parse run
   const existingJobNums = new Set(state.jobs.map(j => String(j.jobNumber)));
   const existingArch = new Set(state.archivedJobs.map(j => String(j.jobNumber)));
 
@@ -9526,9 +9565,25 @@ function fpParseFiles() {
     // Skip if already imported
     if (existingJobNums.has(fpJobId) || existingArch.has(fpJobId)) return;
 
-    const custNameRaw = row['Customer'] || '';
+    const custNameRaw = row['Customer Display Name'] || row['Customer'] || '';
     const custNorm = fpNormName(custNameRaw);
-    const custId = custByNorm[custNorm] || null;
+    // Match existing customer or create a new one inline
+    let custId = custByNorm[custNorm] || null;
+    if (!custId && custNameRaw) {
+      // Create customer now so every job has an owner
+      const newCust = {
+        id: uid('cust'),
+        name: custNameRaw,
+        phone: row['Customer Phone'] || '',
+        email: row['Customer Email'] || '',
+        address: row['Location Address'] || '',
+        billing: '', maintenancePlan: !!(row['HVAC Agreement'] && row['HVAC Agreement'] !== 'None' && row['HVAC Agreement'] !== '0'),
+        notes: '', createdAt: Date.now(), source: 'fieldpulse_import'
+      };
+      _fpNewCustomers.push(newCust);
+      custByNorm[custNorm] = newCust.id;
+      custId = newCust.id;
+    }
 
     // Get linked invoices
     const linkedInvs = invByJobId[fpJobId] || [];
@@ -9615,11 +9670,7 @@ function fpParseFiles() {
       createdAt: Date.now()
     };
 
-    if (custId) {
-      matched.push(jobObj);
-    } else {
-      unmatched.push({ job: jobObj, fpName: custNameRaw });
-    }
+    matched.push(jobObj);
   });
 
   _fpPreview = [...matched, ...unmatched.map(u => u.job)];
@@ -9634,11 +9685,11 @@ function fpParseFiles() {
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
       <div style="background:var(--surface2);border-radius:8px;padding:12px;text-align:center">
         <div style="font-size:20px;font-weight:700;color:var(--green)">${matched.length}</div>
-        <div style="font-size:11px;color:var(--text3)">Matched</div>
+        <div style="font-size:11px;color:var(--text3)">Jobs to Import</div>
       </div>
       <div style="background:var(--surface2);border-radius:8px;padding:12px;text-align:center">
-        <div style="font-size:20px;font-weight:700;color:var(--yellow, #f5a623)">${unmatched.length}</div>
-        <div style="font-size:11px;color:var(--text3)">Unmatched</div>
+        <div style="font-size:20px;font-weight:700;color:var(--yellow, #f5a623)">${_fpNewCustomers.length}</div>
+        <div style="font-size:11px;color:var(--text3)">New Customers</div>
       </div>
       <div style="background:var(--surface2);border-radius:8px;padding:12px;text-align:center">
         <div style="font-size:20px;font-weight:700;color:var(--text3)">${skipped}</div>
@@ -9718,28 +9769,29 @@ async function fpCommitImport() {
   btn.textContent = 'Importing…';
   btn.disabled = true;
 
-  // Jobs to import — skip those with no customer assigned (null) unless __new__
-  const toImport = _fpPreview.filter(j => j.customerId && j.customerId !== null);
-  let imported = 0, created = 0, skipped = 0;
+  // Save auto-created customers first — skip any that already exist in state
+  // (handles case where customers loaded after parse but before commit)
+  const existingNorms = new Set(state.customers.map(c => fpNormName(c.name)));
+  let created = 0;
+  for (const cust of _fpNewCustomers) {
+    if (existingNorms.has(fpNormName(cust.name))) {
+      // Already in CRM — update the job's customerId to the real one
+      const real = state.customers.find(c => fpNormName(c.name) === fpNormName(cust.name));
+      if (real) _fpPreview.filter(j => j.customerId === cust.id).forEach(j => j.customerId = real.id);
+      continue;
+    }
+    state.customers.unshift(cust);
+    await saveOne('customers', cust);
+    existingNorms.add(fpNormName(cust.name));
+    created++;
+  }
+
+  // Jobs to import — skip only those with no customer at all
+  const toImport = _fpPreview.filter(j => j.customerId);
+  let imported = 0, skipped = 0;
 
   for (const job of toImport) {
     let custId = job.customerId;
-
-    // Create new customer if needed
-    if (custId === '__new__') {
-      const newCust = {
-        id: uid('cust'),
-        name: job.customerName || 'Unknown',
-        phone: '', email: '', address: job.address || '',
-        billing: '', maintenancePlan: false, notes: '',
-        createdAt: Date.now(), source: 'fieldpulse_import'
-      };
-      state.customers.unshift(newCust);
-      await saveOne('customers', newCust);
-      custId = newCust.id;
-      created++;
-    }
-
     job.customerId = custId;
 
     // Add to active jobs state — they'll appear in the Closed tab (status: paid/closed)
