@@ -131,8 +131,8 @@ ul { list-style: none; }
   transition: border-color .15s;
 }
 .card:active { border-color: var(--border2); }
-.card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
-.card-title { font-weight: 600; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 4px; gap: 8px; overflow: hidden; }
+.card-title { font-weight: 600; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
 .card-sub { font-size: 13px; color: var(--text2); margin-top: 2px; }
 .card-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .badge {
@@ -300,11 +300,11 @@ textarea.form-input, .form-textarea { resize: vertical; min-height: 44px; overfl
 #calc-fab svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2; }
 
 #cal-fab {
-  position: fixed; bottom: calc(var(--nav-h) + 72px); right: 14px;
+  position: fixed; bottom: calc(var(--nav-h) + 76px); right: 14px;
   width: 50px; height: 50px; border-radius: 50%;
   background: var(--surface2); color: var(--text); border: 1px solid var(--border2);
   display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 4px 16px rgba(0,0,0,.3); z-index: 150;
+  box-shadow: 0 4px 16px rgba(0,0,0,.3); z-index: 151;
   transition: transform .15s;
 }
 #cal-fab:active { transform: scale(.93); }
@@ -811,6 +811,11 @@ textarea.form-input, .form-textarea { resize: vertical; min-height: 44px; overfl
               <div style="font-size:12px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Diagnostic Fee ($)</div>
               <input type="number" id="rate-diag-fee" class="form-input" style="width:100%" min="0" step="1">
             </div>
+            <div style="grid-column:1/-1">
+              <div style="font-size:12px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Labor &amp; Overhead Cost ($/hr)</div>
+              <input type="number" id="rate-labor-cost" class="form-input" style="width:100%" min="0" step="1">
+              <div style="font-size:11px;color:var(--text3);margin-top:4px">All-in cost per billable hour (wages + burden + overhead). Used for profitability reporting only — not shown to customers.</div>
+            </div>
           </div>
           <button class="btn btn-primary" style="width:100%" onclick="saveRates()">Save Rates</button>
           <div id="rates-save-msg" style="font-size:12px;color:var(--green);margin-top:8px;text-align:center;display:none">Rates saved.</div>
@@ -838,6 +843,18 @@ textarea.form-input, .form-textarea { resize: vertical; min-height: 44px; overfl
             <button class="btn btn-secondary" onclick="openFpImportModal()">Import</button>
           </div>
           <div id="fp-import-status" style="font-size:12px;color:var(--text3);margin-top:6px"></div>
+        </div>
+
+        <!-- Diagnostic Test Runner (admin only) -->
+        <div class="card" style="margin-bottom:20px" id="diag-card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+            <div>
+              <div class="card-title">System Diagnostics</div>
+              <div style="font-size:12px;color:var(--text3);margin-top:2px">Run automated checks on auth, data, and layout</div>
+            </div>
+            <button class="btn btn-secondary" onclick="runDiagnostics()">Run Tests</button>
+          </div>
+          <div id="diag-results" style="margin-top:10px;display:none"></div>
         </div>
 
         <!-- Account -->
@@ -2177,6 +2194,10 @@ const APP_CONFIG = {
   rateContinuous:   182,
   rateInstallation: 170,
 
+  // Labor & overhead cost (used for profitability/margin reporting)
+  // All-in cost per billable hour: wages + burden + overhead = $120/hr
+  laborCostPerHour: 120,
+
   // Diagnostic fee
   diagFee: 125,
 
@@ -2497,10 +2518,11 @@ async function load() {
     }
     if (ratesRes.data && ratesRes.data[0]) {
       const r = ratesRes.data[0].value;
-      if (r.rateServiceCall)  APP_CONFIG.rateServiceCall  = r.rateServiceCall;
-      if (r.rateContinuous)   APP_CONFIG.rateContinuous   = r.rateContinuous;
-      if (r.rateInstallation) APP_CONFIG.rateInstallation = r.rateInstallation;
-      if (r.diagFee)          APP_CONFIG.diagFee          = r.diagFee;
+      if (r.rateServiceCall)    APP_CONFIG.rateServiceCall    = r.rateServiceCall;
+      if (r.rateContinuous)     APP_CONFIG.rateContinuous     = r.rateContinuous;
+      if (r.rateInstallation)   APP_CONFIG.rateInstallation   = r.rateInstallation;
+      if (r.diagFee)            APP_CONFIG.diagFee            = r.diagFee;
+      if (r.laborCostPerHour)   APP_CONFIG.laborCostPerHour   = r.laborCostPerHour;
     }
     if (techsRes.data && techsRes.data[0] && Array.isArray(techsRes.data[0].value) && techsRes.data[0].value.length) {
       APP_CONFIG.techs = techsRes.data[0].value;
@@ -2578,6 +2600,445 @@ async function load() {
   await autoGenRecurringJobs();
 
   showLoadingOverlay(false);
+}
+
+
+// ── DIAGNOSTIC TEST RUNNER ────────────────────────────────
+async function runDiagnostics() {
+  const el = document.getElementById('diag-results');
+  if (!el) return;
+  el.style.display = 'block';
+  el.innerHTML = '<div style="font-size:13px;color:var(--text3)">Running tests...</div>';
+
+  const results = [];
+  const pass = (label, note='') => results.push({ ok: true,  label, note });
+  const fail = (label, note='') => results.push({ ok: false, label, note });
+  const warn = (label, note='') => results.push({ ok: null,  label, note });
+
+  // ── 1. AUTH ──────────────────────────────────────────────
+  if (currentUser) {
+    pass('Auth: session active', currentUser.username + ' · ' + currentUser.role);
+  } else {
+    fail('Auth: no active session');
+  }
+
+  if (currentUser && currentUser.role === 'admin') {
+    pass('Auth: admin role confirmed');
+  } else if (currentUser && currentUser.role === 'tech') {
+    pass('Auth: tech role confirmed', currentUser.username);
+  } else {
+    fail('Auth: role missing or unknown');
+  }
+
+  // ── 2. SUPABASE CONNECTIVITY ─────────────────────────────
+  try {
+    const { data, error } = await sb.from('meta').select('key').limit(1);
+    if (error) throw error;
+    pass('Supabase: connection OK');
+  } catch(e) {
+    fail('Supabase: connection failed', e.message);
+  }
+
+  // ── 3. USERS TABLE ───────────────────────────────────────
+  try {
+    const { data, error } = await sb.from('users').select('username, email, role');
+    if (error) throw error;
+    const expectedUsers = [
+      { username: 'trevor',    email: 'trevor@tomfalkph.com',     role: 'admin' },
+      { username: 'jim',       email: 'james@tomfalkph.com',      role: 'tech'  },
+      { username: 'jeff',      email: 'jeff@tomfalkph.com',       role: 'tech'  },
+      { username: 'apprentice',email: 'apprentice@tomfalkph.com', role: 'tech'  },
+    ];
+    const found = (data||[]);
+    const foundNames = found.map(u => u.username);
+    const missing = expectedUsers.filter(u => !foundNames.includes(u.username));
+    if (missing.length === 0) {
+      pass('Users table: all 4 accounts present');
+    } else {
+      fail('Users table: missing accounts', missing.map(u => u.username).join(', '));
+    }
+    // Check every user email and role exactly
+    expectedUsers.forEach(exp => {
+      const row = found.find(u => u.username === exp.username);
+      if (!row) return; // already caught above
+      if (row.email !== exp.email) {
+        fail('Users table: ' + exp.username + ' email wrong', 'got ' + row.email + ', expected ' + exp.email);
+      } else if (row.role !== exp.role) {
+        fail('Users table: ' + exp.username + ' role wrong', 'got ' + row.role + ', expected ' + exp.role);
+      } else {
+        pass('Users table: ' + exp.username + ' → ' + exp.email + ' · ' + exp.role + ' ✓');
+      }
+    });
+  } catch(e) {
+    fail('Users table: query failed', e.message);
+  }
+
+  // ── 4. STATE INTEGRITY ───────────────────────────────────
+  if (Array.isArray(state.customers)) {
+    pass('State: customers loaded', state.customers.length + ' records');
+  } else {
+    fail('State: customers not an array');
+  }
+
+  if (Array.isArray(state.jobs)) {
+    pass('State: jobs loaded', state.jobs.length + ' active jobs');
+  } else {
+    fail('State: jobs not an array');
+  }
+
+  if (Array.isArray(state.recurring)) {
+    pass('State: recurring loaded', state.recurring.length + ' templates');
+  } else {
+    fail('State: recurring not an array');
+  }
+
+  if (Array.isArray(state.materials)) {
+    pass('State: materials loaded', state.materials.length + ' items');
+  } else {
+    fail('State: materials not an array');
+  }
+
+  // ── 5. APP CONFIG ────────────────────────────────────────
+  if (APP_CONFIG.rateServiceCall === 202) {
+    pass('Config: service call rate $202/hr ✓');
+  } else {
+    fail('Config: service call rate wrong', 'got $' + APP_CONFIG.rateServiceCall);
+  }
+  if (APP_CONFIG.rateContinuous === 182) {
+    pass('Config: continuous rate $182/hr ✓');
+  } else {
+    fail('Config: continuous rate wrong', 'got $' + APP_CONFIG.rateContinuous);
+  }
+  if (APP_CONFIG.diagFee === 125) {
+    pass('Config: diag fee $125 ✓');
+  } else {
+    fail('Config: diag fee wrong — must be $125', 'got $' + APP_CONFIG.diagFee);
+  }
+  if (APP_CONFIG.laborCostPerHour === 120) {
+    pass('Config: labor & overhead cost $120/hr ✓');
+  } else if (!APP_CONFIG.laborCostPerHour) {
+    fail('Config: laborCostPerHour missing — profitability reports are wrong');
+  } else {
+    fail('Config: labor & overhead cost wrong — profitability reports will be incorrect', 'got $' + APP_CONFIG.laborCostPerHour + '/hr, expected $120/hr');
+  }
+  if (Array.isArray(APP_CONFIG.techs) && APP_CONFIG.techs.length >= 3) {
+    pass('Config: techs list loaded', APP_CONFIG.techs.join(', '));
+  } else {
+    fail('Config: techs list missing or empty');
+  }
+
+  // ── 6. ROLE GATES ────────────────────────────────────────
+  if (isAdmin()) {
+    const settingsVisible = document.getElementById('view-settings') &&
+      document.getElementById('nav-settings') !== null;
+    pass('Role gate: admin sees settings nav');
+
+    const financeVisible = document.getElementById('view-finance') !== null;
+    pass('Role gate: admin sees finance view');
+  } else if (isTech()) {
+    warn('Role gate: logged in as tech — run as trevor for full admin gate check');
+  }
+
+  // ── 7. STORAGE BUCKETS ───────────────────────────────────
+  try {
+    const { data, error } = await sb.storage.getBucket('job-photos');
+    if (error) throw error;
+    if (!data.public) {
+      pass('Storage: job-photos bucket private ✓');
+    } else {
+      fail('Storage: job-photos is PUBLIC — should be private');
+    }
+  } catch(e) {
+    warn('Storage: could not verify job-photos bucket', e.message);
+  }
+
+  try {
+    const { data, error } = await sb.storage.getBucket('customer-assets');
+    if (error) throw error;
+    if (!data.public) {
+      pass('Storage: customer-assets bucket private ✓');
+    } else {
+      fail('Storage: customer-assets is PUBLIC — should be private');
+    }
+  } catch(e) {
+    warn('Storage: could not verify customer-assets bucket', e.message);
+  }
+
+  // ── 8. RECURRING AUTO-GEN ────────────────────────────────
+  const overdueTemplates = (state.recurring||[]).filter(r =>
+    r.active !== false && recurStatus(r) === 'overdue'
+  );
+  const overdueWithOpenJob = overdueTemplates.filter(r =>
+    state.jobs.some(j => j.recurringId === r.id && !['completed','paid','closed'].includes(j.status))
+  );
+  if (overdueTemplates.length === 0) {
+    pass('Recurring: no overdue templates');
+  } else if (overdueWithOpenJob.length === overdueTemplates.length) {
+    pass('Recurring: all overdue templates have open jobs auto-generated', overdueTemplates.length + ' template(s)');
+  } else {
+    warn('Recurring: ' + overdueTemplates.length + ' overdue, ' + overdueWithOpenJob.length + ' have open jobs');
+  }
+
+  // ── 9. LAYOUT CHECKS ─────────────────────────────────────
+  // Check FABs not overlapping
+  const calcFab = document.getElementById('calc-fab');
+  const calFab  = document.getElementById('cal-fab');
+  if (calcFab && calFab) {
+    const calcRect = calcFab.getBoundingClientRect();
+    const calRect  = calFab.getBoundingClientRect();
+    const overlap  = !(calcRect.bottom < calRect.top || calRect.bottom < calcRect.top);
+    if (!overlap) {
+      pass('Layout: FAB buttons not overlapping ✓');
+    } else {
+      fail('Layout: FAB buttons overlapping — calc and calendar FABs collide');
+    }
+  } else {
+    warn('Layout: FAB elements not found in DOM');
+  }
+
+  // Check no content bleeding off screen
+  const cards = document.querySelectorAll('.card');
+  let bleedCount = 0;
+  cards.forEach(c => {
+    const rect = c.getBoundingClientRect();
+    if (rect.right > window.innerWidth + 2) bleedCount++;
+  });
+  if (bleedCount === 0) {
+    pass('Layout: no cards bleeding off screen ✓');
+  } else {
+    fail('Layout: ' + bleedCount + ' card(s) bleeding off right edge');
+  }
+
+  // ── 10. MONEY MATH ───────────────────────────────────────
+  // calcDuration: 9:00 → 10:30 = 90 mins
+  const dur = calcDuration('09:00', '10:30');
+  if (dur === 90) {
+    pass('Math: calcDuration 9:00→10:30 = 90 min ✓');
+  } else {
+    fail('Math: calcDuration wrong', 'got ' + dur + ' min, expected 90');
+  }
+
+  // totalHours: one 90-min entry = 1.5 hrs
+  const th = totalHours([{ clockIn: '09:00', clockOut: '10:30' }]);
+  if (Math.abs(th - 1.5) < 0.01) {
+    pass('Math: totalHours 90min = 1.5hr ✓');
+  } else {
+    fail('Math: totalHours wrong', 'got ' + th + ', expected 1.5');
+  }
+
+  // buildLaborLines: 1.5hrs → service call (1hr @$202) + continuous (0.5hr @$182)
+  const testJob = {
+    timeLog: [{ clockIn: '09:00', clockOut: '10:30', clockInDate: today(), date: today() }],
+    lineItems: [], history: [], payments: [], status: 'active'
+  };
+  const laborLines = buildLaborLines(testJob);
+  if (laborLines.length === 2) {
+    const scLine = laborLines[0];
+    const coLine = laborLines[1];
+    const scExpected = APP_CONFIG.rateServiceCall * 1;
+    const coExpected = APP_CONFIG.rateContinuous * 0.5;
+    if (Math.abs(scLine.total - scExpected) < 0.01) {
+      pass('Math: service call line $' + scExpected + ' ✓');
+    } else {
+      fail('Math: service call line wrong', 'got $' + scLine.total + ', expected $' + scExpected);
+    }
+    if (Math.abs(coLine.total - coExpected) < 0.01) {
+      pass('Math: continuous line $' + coExpected + ' ✓');
+    } else {
+      fail('Math: continuous line wrong', 'got $' + coLine.total + ', expected $' + coExpected);
+    }
+  } else {
+    fail('Math: buildLaborLines returned ' + laborLines.length + ' lines, expected 2');
+  }
+
+  // ── 11. MARGIN MATH ──────────────────────────────────────
+  // Plan customer: cost $100, tier $26-$150 = 45% margin → sell = $100 / (1-0.45) = $181.82
+  const planMargin = getMatMarginPct(100, true);
+  if (planMargin === 45) {
+    pass('Margin: plan customer $100 cost → 45% ✓');
+  } else {
+    fail('Margin: plan customer $100 cost wrong', 'got ' + planMargin + '%, expected 45%');
+  }
+
+  // Non-plan customer: cost $100, floor is 40% (35% tier does NOT apply to non-plan)
+  const nonPlanMarginLow = getMatMarginPct(2500, false);
+  if (nonPlanMarginLow === 40) {
+    pass('Margin: non-plan $2500 cost → 40% floor (not 35%) ✓');
+  } else {
+    fail('Margin: non-plan $2500 cost wrong', 'got ' + nonPlanMarginLow + '%, expected 40% (35% is plan-only)');
+  }
+
+  // Plan customer: cost $2500, tier $2000+ = 35% margin
+  const planMarginHigh = getMatMarginPct(2500, true);
+  if (planMarginHigh === 35) {
+    pass('Margin: plan customer $2500 cost → 35% ✓');
+  } else {
+    fail('Margin: plan customer $2500 cost wrong', 'got ' + planMarginHigh + '%, expected 35%');
+  }
+
+  // ── 12. INVOICE STATUS LOGIC ─────────────────────────────
+  const paidJob = { payments: [{ amount: 500, refunded: false }], lineItems: [{ total: 450, taxable: false }], timeLog: [], invoiceStatus: 'paid' };
+  const derivedPaid = deriveInvoiceStatus(paidJob);
+  if (derivedPaid === 'paid') {
+    pass('Invoice: fully paid job derives "paid" status ✓');
+  } else {
+    fail('Invoice: fully paid job status wrong', 'got "' + derivedPaid + '", expected "paid"');
+  }
+
+  const unpaidJob = { payments: [], lineItems: [{ total: 300, taxable: false }], timeLog: [], invoiceStatus: 'sent' };
+  const derivedUnpaid = deriveInvoiceStatus(unpaidJob);
+  if (derivedUnpaid === 'sent') {
+    pass('Invoice: unpaid job derives "sent" status ✓');
+  } else {
+    fail('Invoice: unpaid job status wrong', 'got "' + derivedUnpaid + '"');
+  }
+
+  const partialJob = { payments: [{ amount: 100, refunded: false }], lineItems: [{ total: 300, taxable: false }], timeLog: [], invoiceStatus: 'partial' };
+  const derivedPartial = deriveInvoiceStatus(partialJob);
+  if (derivedPartial === 'partial') {
+    pass('Invoice: partial payment derives "partial" status ✓');
+  } else {
+    fail('Invoice: partial payment status wrong', 'got "' + derivedPartial + '"');
+  }
+
+  // ── 13. JOB NUMBER SEQUENCE ──────────────────────────────
+  const currentJobNum = state.nextId && state.nextId.job;
+  if (currentJobNum && typeof currentJobNum === 'number' && currentJobNum > 0) {
+    pass('Job sequence: nextId.job valid', 'next job will be #' + currentJobNum);
+  } else {
+    fail('Job sequence: nextId.job missing or invalid', 'got: ' + JSON.stringify(currentJobNum));
+  }
+
+  // Check no duplicate job numbers across active + archived
+  const allJobsForCheck = [...state.jobs, ...(state.archivedJobs || [])];
+  const jobNums = allJobsForCheck.map(j => j.jobNumber).filter(Boolean);
+  const uniqueJobNums = new Set(jobNums);
+  if (jobNums.length === uniqueJobNums.size) {
+    pass('Job sequence: no duplicate job numbers ✓', jobNums.length + ' jobs checked (active + archived)');
+  } else {
+    const dupeNums = jobNums.filter((n, i) => jobNums.indexOf(n) !== i);
+    fail('Job sequence: duplicate job numbers found', 'duplicates: #' + [...new Set(dupeNums)].join(', #'));
+  }
+
+  // Check no duplicate estimate numbers
+  const estNums = (state.estimates || []).map(e => e.estimateNumber).filter(Boolean);
+  const uniqueEstNums = new Set(estNums);
+  if (estNums.length === uniqueEstNums.size) {
+    pass('Estimates: no duplicate estimate numbers ✓', estNums.length + ' estimates checked');
+  } else {
+    const dupeEst = estNums.filter((n, i) => estNums.indexOf(n) !== i);
+    fail('Estimates: duplicate estimate numbers found', 'duplicates: #' + [...new Set(dupeEst)].join(', #'));
+  }
+
+  // Check no duplicate invoice numbers (invoices are jobs with invoiceStatus != draft)
+  const invoicedJobs = allJobsForCheck.filter(j => j.invoiceStatus && j.invoiceStatus !== 'draft' && j.jobNumber);
+  const invNums = invoicedJobs.map(j => j.jobNumber).filter(Boolean);
+  const uniqueInvNums = new Set(invNums);
+  if (invNums.length === uniqueInvNums.size) {
+    pass('Invoices: no duplicate invoice numbers ✓', invNums.length + ' invoices checked');
+  } else {
+    const dupeInv = invNums.filter((n, i) => invNums.indexOf(n) !== i);
+    fail('Invoices: duplicate invoice numbers found', 'duplicates: #' + [...new Set(dupeInv)].join(', #'));
+  }
+
+  // ── 14. TECH VISIBILITY GATE ─────────────────────────────
+  if (isAdmin()) {
+    // Admin should see all jobs regardless of tech assignment
+    const allJobsVisible = state.jobs.length;
+    pass('Tech gate: admin sees all ' + allJobsVisible + ' jobs ✓');
+  } else if (isTech() && currentUser) {
+    // Tech should only see jobs assigned to them
+    const myJobs = state.jobs.filter(j => (j.techs || []).includes(currentUser.username));
+    const otherJobs = state.jobs.filter(j => !(j.techs || []).includes(currentUser.username));
+    if (otherJobs.length === 0) {
+      pass('Tech gate: tech only sees own jobs ✓', myJobs.length + ' jobs visible');
+    } else {
+      fail('Tech gate: tech can see jobs not assigned to them', otherJobs.length + ' unauthorized job(s) visible');
+    }
+  }
+
+  // ── 15. ESTIMATE → JOB CONVERSION INTEGRITY ──────────────
+  const convertedEsts = (state.estimates || []).filter(e => e.status === 'converted' && e.convertedJobId);
+  const brokenConversions = convertedEsts.filter(e => {
+    const linkedJob = [...state.jobs, ...state.archivedJobs].find(j => j.id === e.convertedJobId);
+    return !linkedJob;
+  });
+  if (brokenConversions.length === 0) {
+    pass('Estimates: all converted estimates have linked jobs ✓', convertedEsts.length + ' checked');
+  } else {
+    fail('Estimates: ' + brokenConversions.length + ' converted estimate(s) have no linked job');
+  }
+
+  // Check no estimate stuck in sent/accepted with expired date still open
+  const nowTs2 = Date.now();
+  const stuckExpired = (state.estimates || []).filter(e =>
+    e.expiresAt && e.expiresAt < nowTs2 && !['converted','declined','expired'].includes(e.status || 'draft')
+  );
+  if (stuckExpired.length === 0) {
+    pass('Estimates: no stuck open estimates past expiry ✓');
+  } else {
+    fail('Estimates: ' + stuckExpired.length + ' estimate(s) past expiry but not marked expired');
+  }
+
+  // ── 16. PRICEBOOK INTEGRITY ──────────────────────────────
+  const pb = state.pricebook || [];
+  if (pb.length > 0) {
+    const brokenPb = pb.filter(p => !p.id || !p.name || p.sellPrice === undefined || p.sellPrice === null);
+    if (brokenPb.length === 0) {
+      pass('Pricebook: all items have required fields ✓', pb.length + ' items');
+    } else {
+      fail('Pricebook: ' + brokenPb.length + ' item(s) missing id/name/sellPrice');
+    }
+    // Check no item with $0 sell price (likely a data entry error)
+    const zeroPriced = pb.filter(p => p.sellPrice === 0);
+    if (zeroPriced.length === 0) {
+      pass('Pricebook: no $0 sell price items ✓');
+    } else {
+      warn('Pricebook: ' + zeroPriced.length + ' item(s) with $0 sell price — intentional?', zeroPriced.map(p => p.name).join(', '));
+    }
+  } else {
+    warn('Pricebook: empty — no items loaded');
+  }
+
+  // ── 17. SUPABASE WRITE ROUND-TRIP ────────────────────────
+  try {
+    const testKey = 'diag_test_' + Date.now();
+    const testVal = { ts: Date.now(), test: true };
+    const { error: writeErr } = await sb.from('meta').upsert({ key: testKey, value: testVal }, { onConflict: 'key' });
+    if (writeErr) throw writeErr;
+    const { data: readBack, error: readErr } = await sb.from('meta').select('value').eq('key', testKey).single();
+    if (readErr) throw readErr;
+    // Clean up test record
+    await sb.from('meta').delete().eq('key', testKey);
+    if (readBack && readBack.value && readBack.value.test === true) {
+      pass('Supabase: write round-trip OK ✓ (write → read → delete verified)');
+    } else {
+      fail('Supabase: write round-trip failed — data did not come back correctly');
+    }
+  } catch(e) {
+    fail('Supabase: write round-trip error', e.message);
+  }
+
+  // ── RENDER RESULTS ───────────────────────────────────────
+  const passCount = results.filter(r => r.ok === true).length;
+  const failCount = results.filter(r => r.ok === false).length;
+  const warnCount = results.filter(r => r.ok === null).length;
+
+  const summary = failCount === 0
+    ? `<div style="font-size:13px;font-weight:700;color:var(--green);margin-bottom:10px">✓ ${passCount} passed · ${warnCount} warnings · 0 failures</div>`
+    : `<div style="font-size:13px;font-weight:700;color:var(--red-l);margin-bottom:10px">✗ ${failCount} failed · ${passCount} passed · ${warnCount} warnings</div>`;
+
+  el.innerHTML = summary + results.map(r => {
+    const icon  = r.ok === true ? '✓' : r.ok === false ? '✗' : '⚠';
+    const color = r.ok === true ? 'var(--green)' : r.ok === false ? 'var(--red-l)' : '#f59e0b';
+    return `<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px;align-items:flex-start">
+      <span style="color:${color};font-weight:700;flex-shrink:0">${icon}</span>
+      <div style="flex:1;min-width:0">
+        <span style="color:var(--text)">${r.label}</span>
+        ${r.note ? `<span style="color:var(--text3);margin-left:6px">${r.note}</span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // ── AUTO-GEN RECURRING JOBS ───────────────────────────────
@@ -7417,10 +7878,12 @@ function populateRateInputs() {
   const co  = document.getElementById('rate-continuous');
   const ins = document.getElementById('rate-installation');
   const df  = document.getElementById('rate-diag-fee');
+  const lc  = document.getElementById('rate-labor-cost');
   if (sc)  sc.value  = APP_CONFIG.rateServiceCall;
   if (co)  co.value  = APP_CONFIG.rateContinuous;
   if (ins) ins.value = APP_CONFIG.rateInstallation;
   if (df)  df.value  = APP_CONFIG.diagFee;
+  if (lc)  lc.value  = APP_CONFIG.laborCostPerHour;
 }
 
 async function saveRates() {
@@ -7428,13 +7891,15 @@ async function saveRates() {
   const co  = parseFloat(document.getElementById('rate-continuous').value);
   const ins = parseFloat(document.getElementById('rate-installation').value);
   const df  = parseFloat(document.getElementById('rate-diag-fee').value);
-  if (isNaN(sc) || isNaN(co) || isNaN(ins) || isNaN(df)) { showToast('All rate fields are required.','error'); return; }
-  APP_CONFIG.rateServiceCall  = sc;
-  APP_CONFIG.rateContinuous   = co;
-  APP_CONFIG.rateInstallation = ins;
-  APP_CONFIG.diagFee          = df;
+  const lc  = parseFloat(document.getElementById('rate-labor-cost').value);
+  if (isNaN(sc) || isNaN(co) || isNaN(ins) || isNaN(df) || isNaN(lc)) { showToast('All rate fields are required.','error'); return; }
+  APP_CONFIG.rateServiceCall    = sc;
+  APP_CONFIG.rateContinuous     = co;
+  APP_CONFIG.rateInstallation   = ins;
+  APP_CONFIG.diagFee            = df;
+  APP_CONFIG.laborCostPerHour   = lc;
   try {
-    await sb.from('meta').upsert({ key: 'rates', value: { rateServiceCall: sc, rateContinuous: co, rateInstallation: ins, diagFee: df } }, { onConflict: 'key' });
+    await sb.from('meta').upsert({ key: 'rates', value: { rateServiceCall: sc, rateContinuous: co, rateInstallation: ins, diagFee: df, laborCostPerHour: lc } }, { onConflict: 'key' });
   } catch(e) { console.error('saveRates error', e); }
   localBackup();
   const msg = document.getElementById('rates-save-msg');
@@ -7537,7 +8002,7 @@ function renderReporting() {
   const totalJobs = Object.values(statusCounts).reduce((a,b)=>a+b,0) || 1;
 
   // ── 5. MARGIN / PROFITABILITY ────────────────────────────
-  const LABOR_COST = 40; // $/hr — from app_settings labor_cost_per_hour
+  const LABOR_COST = APP_CONFIG.laborCostPerHour; // $/hr — all-in cost: wages + burden + overhead
   let totalRevenue = 0, totalLaborCost = 0, totalMaterialCost = 0, totalMaterialSell = 0;
   allJobs.forEach(j => {
     if (!['paid','closed','invoiced'].includes(j.status)) return;
@@ -8066,13 +8531,13 @@ function renderSettings(keepPage) {
     ? matSlice.map(m => `
         <div class="card" style="margin-bottom:8px">
           <div class="card-header">
-            <div>
+            <div style="flex:1;min-width:0;overflow:hidden">
               <div class="card-title">${m.name}${m.sku ? ` <span style="font-size:11px;color:var(--text3);font-weight:400">#${m.sku}</span>` : ''}</div>
               ${m.description ? `<div class="card-sub">${m.description}</div>` : ''}
             </div>
-            <div style="text-align:right;flex-shrink:0">
-              <div style="font-weight:700;color:var(--green)">${fmtMoney(m.sell)}</div>
-              <div style="font-size:11px;color:var(--text3)">cost ${fmtMoney(m.cost)} · ${m.margin}%</div>
+            <div style="text-align:right;flex-shrink:0;min-width:0;max-width:45%">
+              <div style="font-weight:700;color:var(--green);white-space:nowrap">${fmtMoney(m.sell)}</div>
+              <div style="font-size:11px;color:var(--text3);white-space:nowrap">cost ${fmtMoney(m.cost)} · ${m.margin}%</div>
             </div>
           </div>
           <div style="display:flex;gap:8px;margin-top:8px">
