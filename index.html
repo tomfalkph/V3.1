@@ -2371,6 +2371,7 @@ async function doLogin() {
 async function doLogout() {
   await sb.auth.signOut();
   authClearSession();
+  try { localStorage.removeItem('tfcrm_view'); } catch(e) {}
   currentUser = null;
   authShowLogin();
 }
@@ -3150,7 +3151,7 @@ function showView(name, btnEl) {
     if (nb) nb.classList.add('active');
   }
   currentView = name;
-  try { localStorage.setItem('tfcrm_view', JSON.stringify({ view: name, jobId: currentJobId || null })); } catch(e) {}
+  try { localStorage.setItem('tfcrm_view', JSON.stringify({ view: name, jobId: currentJobId || null, user: currentUser?.username || null })); } catch(e) {}
   const titles = {
     dashboard:'Dashboard', leads:'Leads', customers:'Customers',
     jobs:'Jobs', 'job-detail':'Job Detail', 'customer-detail':'Customer Detail',
@@ -9885,7 +9886,8 @@ async function fpCommitImport() {
       await load();
       try {
         const saved = JSON.parse(localStorage.getItem('tfcrm_view') || 'null');
-        if (saved && saved.view && saved.view !== 'dashboard') {
+        const savedViewBelongsToUser = saved && saved.user && saved.user === currentUser?.username;
+        if (savedViewBelongsToUser && saved.view && saved.view !== 'dashboard') {
           if (saved.view === 'job-detail' && saved.jobId) { openJobDetail(saved.jobId); }
           else { showView(saved.view); }
         } else { renderDashboard(); }
