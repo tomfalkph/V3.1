@@ -2963,8 +2963,9 @@ async function runDiagnostics() {
     pass('Tech gate: admin sees all ' + allJobsVisible + ' jobs ✓');
   } else if (isTech() && currentUser) {
     // Tech should only see jobs assigned to them
-    const myJobs = state.jobs.filter(j => (j.techs || []).includes(currentUser.username));
-    const otherJobs = state.jobs.filter(j => !(j.techs || []).includes(currentUser.username));
+    const uname = currentUser.username.toLowerCase();
+    const myJobs = state.jobs.filter(j => (j.techs || []).some(t => t.toLowerCase() === uname));
+    const otherJobs = state.jobs.filter(j => !(j.techs || []).some(t => t.toLowerCase() === uname));
     if (otherJobs.length === 0) {
       pass('Tech gate: tech only sees own jobs ✓', myJobs.length + ' jobs visible');
     } else {
@@ -5587,8 +5588,9 @@ function openClockInModal(jobId) {
   document.getElementById('ci-notes').value = '';
   populateTechSelects();
   const sel = document.getElementById('ci-tech');
-  if (sel && currentUser && APP_CONFIG.techs.includes(currentUser.username)) {
-    sel.value = currentUser.username;
+  if (sel && currentUser) {
+    const match = APP_CONFIG.techs.find(t => t.toLowerCase() === currentUser.username.toLowerCase());
+    if (match) sel.value = match;
   }
   openModal('modal-clockin');
 }
@@ -6018,7 +6020,8 @@ function fmtMonth(d) {
 function getCalJobs(tech) {
   // CAL-AUTH: Tech role always sees only their own jobs — ignore chip selection
   if (isTech() && currentUser) {
-    return state.jobs.filter(j => j.scheduledDate && (j.techs||[]).includes(currentUser.username));
+    const uname = currentUser.username.toLowerCase();
+    return state.jobs.filter(j => j.scheduledDate && (j.techs||[]).some(t => t.toLowerCase() === uname));
   }
   if (tech === 'all') return state.jobs.filter(j => j.scheduledDate);
   return state.jobs.filter(j => j.scheduledDate && (j.techs||[]).includes(tech));
