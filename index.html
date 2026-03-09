@@ -6,6 +6,7 @@
 <title>Tom Falk P&H — Field CRM</title>
 <!-- ─── PWA / HOME SCREEN ICON ────────────────────────── -->
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Tom Falk">
 <link rel="apple-touch-icon" href="https://app.tomfalkplumbingandheating.com/Logo.png">
@@ -14,7 +15,7 @@
 <!-- ─────────────────────────────────────────────────────── -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA27u_Ig_EqhOQqq3BUERrrygjjPBJxeWg&libraries=places&callback=initPlaces" async defer></script>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA27u_Ig_EqhOQqq3BUERrrygjjPBJxeWg&libraries=places&callback=initPlaces&loading=async" async defer></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 
@@ -2822,15 +2823,44 @@ async function runDiagnostics() {
   // ── 9. STORAGE BUCKETS ───────────────────────────────────
   for (const bucket of ['job-photos', 'customer-assets']) {
     try {
-      const { error } = await sb.storage.from(bucket).list('', { limit: 1 });
-      if (!error || error.message.includes('policy') || error.statusCode === 400 || error.statusCode === 403) {
-        pass('Storage: ' + bucket + ' bucket exists ✓');
-      } else if ((error.message||'').toLowerCase().includes('not found') || error.statusCode === 404) {
-        fail('Storage: ' + bucket + ' bucket NOT FOUND — create in Supabase Storage', error.message);
+      const probeFile = 'diag-probe-' + Date.now() + '.jpg';
+      const probeBlob = new Blob(['diag'], { type: 'image/jpeg' });
+      const { data: upData, error: upErr } = await sb.storage.from(bucket).upload(probeFile, probeBlob);
+      if (upErr) {
+        if ((upErr.message||'').toLowerCase().includes('not found') || upErr.statusCode === 404) {
+          fail('Storage: ' + bucket + ' bucket NOT FOUND — create in Supabase Storage', upErr.message);
+        } else {
+          fail('Storage: ' + bucket + ' upload probe failed', upErr.message);
+        }
       } else {
-        pass('Storage: ' + bucket + ' bucket exists ✓ (access restricted as expected)');
+        await sb.storage.from(bucket).remove([probeFile]);
+        pass('Storage: ' + bucket + ' upload + delete OK ✓', upData.path);
       }
-    } catch(e) { warn('Storage: could not verify ' + bucket, e.message); }
+    } catch(e) { warn('Storage: could not probe ' + bucket, e.message); }
+  }
+
+  // ── 9b. GOOGLE MAPS / PLACES ─────────────────────────────
+  if (typeof google !== 'undefined' && google.maps) {
+    pass('Maps: Google Maps API loaded ✓');
+    if (google.maps.places) {
+      pass('Maps: places library loaded ✓');
+      if (google.maps.places.PlaceAutocompleteElement) {
+        pass('Maps: PlaceAutocompleteElement available ✓ (modern API)');
+      } else if (google.maps.places.Autocomplete) {
+        warn('Maps: PlaceAutocompleteElement not available — falling back to legacy Autocomplete');
+      } else {
+        fail('Maps: neither PlaceAutocompleteElement nor Autocomplete available — address search broken');
+      }
+    } else {
+      fail('Maps: places library not loaded — address autocomplete broken');
+    }
+    if (placesReady) {
+      pass('Maps: initPlaces callback fired ✓ — autocomplete attached to inputs');
+    } else {
+      fail('Maps: initPlaces not yet called — autocomplete inputs not attached');
+    }
+  } else {
+    fail('Maps: Google Maps API not loaded — address autocomplete broken');
   }
 
   // ── 10. RECURRING AUTO-GEN ───────────────────────────────
@@ -3615,17 +3645,41 @@ window.initPlaces = initPlaces;
 function attachPlaces(inputEl, onSelect) {
   if (!inputEl) return;
   const run = () => {
-    const ac = new google.maps.places.Autocomplete(inputEl, {
-      types: ['address'],
-      componentRestrictions: { country: 'us' }
-    });
-    ac.addListener('place_changed', () => {
-      const p = ac.getPlace();
-      if (p && p.formatted_address) {
-        inputEl.value = p.formatted_address;
-        if (onSelect) onSelect(p.formatted_address);
-      }
-    });
+    // Use PlaceAutocompleteElement (replaces deprecated Autocomplete)
+    if (google.maps.places.PlaceAutocompleteElement) {
+      const pac = new google.maps.places.PlaceAutocompleteElement({
+        types: ['address'],
+        componentRestrictions: { country: 'us' }
+      });
+      // Insert the element visually hidden right after the input, swap values on selection
+      pac.style.cssText = 'position:absolute;opacity:0;pointer-events:none;width:0;height:0';
+      inputEl.parentNode.style.position = 'relative';
+      inputEl.parentNode.appendChild(pac);
+      // Forward keystrokes from input to the pac element
+      inputEl.addEventListener('input', () => { pac.value = inputEl.value; });
+      pac.addEventListener('gmp-select', async (e) => {
+        const place = e.placePrediction.toPlace();
+        await place.fetchFields({ fields: ['formattedAddress'] });
+        const addr = place.formattedAddress;
+        if (addr) {
+          inputEl.value = addr;
+          if (onSelect) onSelect(addr);
+        }
+      });
+      // Also attach legacy as fallback for older API versions
+    } else {
+      const ac = new google.maps.places.Autocomplete(inputEl, {
+        types: ['address'],
+        componentRestrictions: { country: 'us' }
+      });
+      ac.addListener('place_changed', () => {
+        const p = ac.getPlace();
+        if (p && p.formatted_address) {
+          inputEl.value = p.formatted_address;
+          if (onSelect) onSelect(p.formatted_address);
+        }
+      });
+    }
   };
   if (placesReady) run();
   else placesQueue.push(run);
@@ -5194,7 +5248,12 @@ function renderJobDetail() {
         <div class="info-cell" style="grid-column:1/-1"><div class="lbl">Address</div><div class="val">${
           isTech() && !job.timeLog.some(e => e.clockIn)
             ? '<span style="color:var(--text3);font-style:italic">Clock in to view address</span>'
-            : (job.address||cust?.address||'—')
+            : (() => {
+                const addr = job.address||cust?.address||'';
+                if (!addr) return '—';
+                const mapsUrl = `https://maps.google.com/?q=${encodeURIComponent(addr)}`;
+                return `<a href="${mapsUrl}" target="_blank" style="color:var(--blue);text-decoration:none;display:inline-flex;align-items:center;gap:5px">${addr}<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></a>`;
+              })()
         }</div></div>
         <div class="info-cell"><div class="lbl">Scheduled</div><div class="val">${fmtDate(job.scheduledDate)}</div></div>
         <div class="info-cell"><div class="lbl">Priority</div><div class="val">${job.priority||'Normal'}</div></div>
