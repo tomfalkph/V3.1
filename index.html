@@ -828,6 +828,18 @@ textarea.form-input, .form-textarea { resize: vertical; min-height: 44px; overfl
         </div>
         <div id="mat-list"></div>
 
+        <!-- FieldPulse Historical Import -->
+        <div class="card" style="margin-bottom:20px" id="fp-import-card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+            <div>
+              <div class="card-title">Import Historical Data</div>
+              <div style="font-size:12px;color:var(--text3);margin-top:2px">FieldPulse jobs, invoices &amp; payments</div>
+            </div>
+            <button class="btn btn-secondary" onclick="openFpImportModal()">Import</button>
+          </div>
+          <div id="fp-import-status" style="font-size:12px;color:var(--text3);margin-top:6px"></div>
+        </div>
+
         <!-- Account -->
         <div class="card" style="margin-top:20px;margin-bottom:20px">
           <div class="card-title" style="margin-bottom:12px">Account</div>
@@ -1144,6 +1156,82 @@ textarea.form-input, .form-textarea { resize: vertical; min-height: 44px; overfl
       <button class="btn btn-ghost" onclick="closeModal('modal-recurring')">Cancel</button>
       <button class="btn btn-primary" onclick="saveRecurringTemplate()">Save</button>
     </div>
+  </div>
+</div>
+
+<!-- FIELDPULSE HISTORICAL IMPORT -->
+<div class="modal-overlay" id="modal-fp-import">
+  <div class="modal" style="max-height:90dvh;overflow-y:auto">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Import FieldPulse History</div>
+
+    <!-- Step 1: File uploads -->
+    <div id="fp-step-upload">
+      <div style="font-size:13px;color:var(--text2);margin-bottom:16px">Upload all three exports from FieldPulse. Jobs are required. Invoices and Payments are needed for billing history.</div>
+
+      <div class="form-group">
+        <label class="form-label">Jobs CSV <span style="color:var(--red-l)">*</span></label>
+        <div style="display:flex;align-items:center;gap:10px">
+          <input type="file" id="fp-jobs-file" accept=".csv" style="display:none" onchange="fpHandleFile('jobs',this)">
+          <button class="btn btn-secondary" style="flex-shrink:0" onclick="document.getElementById('fp-jobs-file').click()">Choose File</button>
+          <span id="fp-jobs-name" style="font-size:12px;color:var(--text3)">No file chosen</span>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Invoices CSV</label>
+        <div style="display:flex;align-items:center;gap:10px">
+          <input type="file" id="fp-inv-file" accept=".csv" style="display:none" onchange="fpHandleFile('invoices',this)">
+          <button class="btn btn-secondary" style="flex-shrink:0" onclick="document.getElementById('fp-inv-file').click()">Choose File</button>
+          <span id="fp-inv-name" style="font-size:12px;color:var(--text3)">No file chosen</span>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Payments CSV</label>
+        <div style="display:flex;align-items:center;gap:10px">
+          <input type="file" id="fp-pay-file" accept=".csv" style="display:none" onchange="fpHandleFile('payments',this)">
+          <button class="btn btn-secondary" style="flex-shrink:0" onclick="document.getElementById('fp-pay-file').click()">Choose File</button>
+          <span id="fp-pay-name" style="font-size:12px;color:var(--text3)">No file chosen</span>
+        </div>
+      </div>
+
+      <div id="fp-upload-error" style="font-size:13px;color:var(--red-l);margin-bottom:10px;display:none"></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeModal('modal-fp-import')">Cancel</button>
+        <button class="btn btn-primary" id="fp-parse-btn" onclick="fpParseFiles()">Parse Files</button>
+      </div>
+    </div>
+
+    <!-- Step 2: Preview + unmatched resolution -->
+    <div id="fp-step-preview" style="display:none">
+      <div id="fp-preview-summary" style="margin-bottom:14px"></div>
+
+      <!-- Unmatched customers -->
+      <div id="fp-unmatched-section" style="display:none">
+        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:8px">Unmatched Records — Assign Customer</div>
+        <div id="fp-unmatched-list" style="max-height:200px;overflow-y:auto;margin-bottom:14px"></div>
+      </div>
+
+      <!-- Preview table -->
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:8px">Preview <span id="fp-preview-count"></span></div>
+      <div id="fp-preview-table" style="max-height:220px;overflow-y:auto;margin-bottom:14px;font-size:12px"></div>
+
+      <div id="fp-preview-error" style="font-size:13px;color:var(--red-l);margin-bottom:10px;display:none"></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="fpResetToUpload()">Back</button>
+        <button class="btn btn-primary" id="fp-commit-btn" onclick="fpCommitImport()">Import All</button>
+      </div>
+    </div>
+
+    <!-- Step 3: Done -->
+    <div id="fp-step-done" style="display:none;text-align:center;padding:24px 0">
+      <div style="font-size:32px;margin-bottom:12px">✅</div>
+      <div style="font-weight:700;font-size:16px;margin-bottom:6px" id="fp-done-title">Import Complete</div>
+      <div style="font-size:13px;color:var(--text2)" id="fp-done-sub"></div>
+      <div class="modal-actions" style="justify-content:center;margin-top:20px">
+        <button class="btn btn-primary" onclick="closeModal('modal-fp-import')">Done</button>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -3787,16 +3875,21 @@ async function saveAsset() {
     c.assets.push({ id: 'ast-' + Date.now(), make, model, serial, notes, photo: photoPath, createdAt: Date.now() });
   }
 
-  saveOne('customers', c);
+  await saveOne('customers', c);
   closeModal('modal-asset');
   openCustomerDetail(custId);
 }
 
-function deleteAsset(custId, assetId) {
+async function deleteAsset(custId, assetId) {
   const c = state.customers.find(c => c.id === custId);
   if (!c) return;
   c.assets = (c.assets || []).filter(a => a.id !== assetId);
-  saveOne('customers', c);
+  try {
+    await saveOne('customers', c);
+    showToast('Asset removed', 'success');
+  } catch(e) {
+    showToast('Failed to save — check connection', 'error');
+  }
   openCustomerDetail(custId);
 }
 
@@ -3861,7 +3954,7 @@ async function saveJobPhoto() {
   }
   if (!path) { showToast('Upload failed. Check your connection and try again.','error'); return; }
   job.photos.push({ id: 'jph-' + Date.now(), path, caption, createdAt: Date.now() });
-  saveOne('jobs', job);
+  await saveOne('jobs', job);
   closeModal('modal-job-photo');
   renderJobDetail();
 }
@@ -4194,7 +4287,7 @@ function jobCard(j, compact) {
   </div>`;
 }
 
-function saveJob() {
+async function saveJob() {
   const desc = document.getElementById('job-desc').value.trim();
   if (!desc) { showToast('Description required','error'); return; }
   if (!selectedJobCustomerId) { showToast('Please select a customer','error'); return; }
@@ -4291,7 +4384,7 @@ function saveJob() {
       }).join('\n');
       if (!confirm(`⚠ Scheduling conflict detected:\n${names}\n\nSave anyway?`)) return;
     }
-    saveOne('jobs', jobToSave);
+    await saveOne('jobs', jobToSave);
 
     // If spawned from a recurring template, update lastJobDate
     const recurId = document.getElementById('modal-job')?.dataset?.recurId;
@@ -4304,7 +4397,7 @@ function saveJob() {
       delete document.getElementById('modal-job').dataset.recurId;
     }
   }
-  sb.from('meta').upsert({ key: 'nextId', value: state.nextId }, { onConflict: 'key' });
+  await sb.from('meta').upsert({ key: 'nextId', value: state.nextId }, { onConflict: 'key' });
   editingJobId = null;
   closeModal('modal-job');
   resetJobModal();
@@ -4904,7 +4997,7 @@ async function createReturnTrip(mode) {
 
   state.jobs.unshift(newJob);
   await saveOne('jobs', newJob);
-  sb.from('meta').upsert({ key: 'nextId', value: state.nextId }, { onConflict: 'key' });
+  await sb.from('meta').upsert({ key: 'nextId', value: state.nextId }, { onConflict: 'key' });
 
   closeModal('modal-return-trip');
   renderJobs();
@@ -5058,7 +5151,7 @@ async function saveClockOut() {
     job.history.push({ action: 'status_change', to: 'completed', at: Date.now() });
   }
   job.history.push({ action: 'clock_out', tech: entry.tech, at: Date.now() });
-  saveOne('jobs', job);
+  await saveOne('jobs', job);
   _coJobCardFile = null;
   _coPhotoFiles = [];
   closeModal('modal-clockout');
@@ -5139,7 +5232,7 @@ function updateLineType() {
   document.getElementById('line-rate-label').textContent = t === 'labor' ? 'Rate/hr' : 'Sell Price';
   if (t === 'labor') {
     const rate = document.getElementById('line-rate').value;
-    if (!rate) document.getElementById('line-rate').value = '202';
+    if (!rate) document.getElementById('line-rate').value = APP_CONFIG.rateServiceCall;
   }
   calcLineTotal();
 }
@@ -5388,7 +5481,7 @@ function renderCalDay(dateObj, jobs, bodyEl, labelEl) {
   let html = '<div class="cal-day-grid">';
   if (allDay.length) {
     html += `<div class="cal-day-allday" style="padding:6px 12px">
-      <div style="font-size:10px;color:var(--text3);margin-bottom:3px;text-transform:uppercase;letter-spacing:.5px">All Day</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:3px;text-transform:uppercase;letter-spacing:.5px">All Day</div>
       ${allDay.map(j => chipHtml(j)).join('')}
     </div>`;
   }
@@ -5417,7 +5510,7 @@ function renderCalWeek(dateObj, jobs, bodyEl, labelEl) {
   days.forEach(d => {
     const isToday = calDateKey(d) === todayKey;
     html += `<div class="cal-week-day-col${isToday?' today':''}">
-      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px">${d.toLocaleDateString('en-US',{weekday:'short'})}</div>
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px">${d.toLocaleDateString('en-US',{weekday:'short'})}</div>
       <div style="font-size:16px;font-weight:700">${d.getDate()}</div>
     </div>`;
   });
@@ -5457,7 +5550,7 @@ function renderCalMonth(dateObj, jobs, bodyEl, labelEl) {
     html += `<div class="cal-month-cell${isToday?' today':''}" onclick="openJobFromCal('${dayKey}')" style="cursor:pointer">
       <div class="cal-month-date">${d}</div>
       ${dayJobs.slice(0,3).map(j => chipHtml(j)).join('')}
-      ${dayJobs.length > 3 ? `<span style="font-size:10px;color:var(--text3)">+${dayJobs.length-3} more</span>` : ''}
+      ${dayJobs.length > 3 ? `<span style="font-size:11px;color:var(--text3)">+${dayJobs.length-3} more</span>` : ''}
     </div>`;
   }
   html += '</div>';
@@ -5552,7 +5645,7 @@ function openCalc() {
 function calcUpdate() {
   const isPlan = document.getElementById('calc-plan-toggle').classList.contains('on');
   const hours = parseFloat(document.getElementById('calc-hours').value) || 0;
-  const laborRate = parseFloat(document.getElementById('calc-labor-type').value) || 202;
+  const laborRate = parseFloat(document.getElementById('calc-labor-type').value) || APP_CONFIG.rateServiceCall;
   const fees = parseFloat(document.getElementById('calc-fees').value) || 0;
   const multiHour = document.getElementById('calc-multi-hour').checked;
 
@@ -5669,21 +5762,21 @@ function buildLaborLines(job) {
         id: 'labor_' + tech,
         type: 'labor',
         description: `Labor — ${tech}`,
-        detail: `${hrs.toFixed(2)}h @ $202/hr (service call)`,
+        detail: `${hrs.toFixed(2)}h @ $${APP_CONFIG.rateServiceCall}/hr (service call)`,
         qty: hrs,
-        rate: 202,
-        total: hrs * 202,
+        rate: APP_CONFIG.rateServiceCall,
+        total: hrs * APP_CONFIG.rateServiceCall,
         fromTimeLog: true
       });
     } else {
-      const firstHr = 202;
-      const contRate = 182;
+      const firstHr = APP_CONFIG.rateServiceCall;
+      const contRate = APP_CONFIG.rateContinuous;
       const total = firstHr + (hrs - 1) * contRate;
       lines.push({
         id: 'labor_' + tech,
         type: 'labor',
         description: `Labor — ${tech}`,
-        detail: `1h @ $202 + ${(hrs-1).toFixed(2)}h @ $182/hr`,
+        detail: `1h @ $${APP_CONFIG.rateServiceCall} + ${(hrs-1).toFixed(2)}h @ $${APP_CONFIG.rateContinuous}/hr`,
         qty: hrs,
         rate: null,
         total,
@@ -6989,7 +7082,7 @@ async function generateStripePaymentLink(jobId) {
     if (!data.url) { console.warn('stripe-link function error:', data); return null; }
     if (data.mode === 'test') console.warn('⚠️  Stripe test mode — no real money collected.');
     job.paymentLink = data.url;
-    saveOne('jobs', job);
+    await saveOne('jobs', job);
     return data.url;
   } catch(e) {
     console.warn('Stripe payment link error:', e);
@@ -7419,9 +7512,9 @@ function renderReporting() {
           ${revMonths.map(k => {
             const pct = revenueByMonth[k].total / revMax * 100;
             return `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;min-width:36px;flex:1">
-              <div style="font-size:10px;color:var(--text3)">${fmtMoney(revenueByMonth[k].total).replace('$','').replace(',','k').split('.')[0]}</div>
+              <div style="font-size:11px;color:var(--text3)">${fmtMoney(revenueByMonth[k].total).replace('$','').replace(',','k').split('.')[0]}</div>
               <div style="width:100%;background:var(--red);border-radius:4px 4px 0 0;height:${Math.max(pct,2)}%;min-height:3px"></div>
-              <div style="font-size:9px;color:var(--text3);white-space:nowrap">${revenueByMonth[k].label}</div>
+              <div style="font-size:11px;color:var(--text3);white-space:nowrap">${revenueByMonth[k].label}</div>
             </div>`;
           }).join('')}
         </div>
@@ -7586,7 +7679,7 @@ function renderReporting() {
         <div style="overflow-x:auto">
           <table style="width:100%;border-collapse:collapse;font-size:12px">
             <thead>
-              <tr style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">
+              <tr style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">
                 <th style="text-align:left;padding:4px 6px 6px 0;font-weight:600">Month</th>
                 <th style="text-align:right;padding:4px 6px 6px;font-weight:600">Created</th>
                 <th style="text-align:right;padding:4px 6px 6px;font-weight:600">Accepted</th>
@@ -7714,7 +7807,7 @@ function populateRecurCustDropdown() {
   const matches = state.customers.filter(c => c.name.toLowerCase().includes(q) || (c.phone||'').includes(q));
   res.innerHTML = matches.slice(0,5).map(c =>
     `<div onclick="selectRecurCustomer(${JSON.stringify(c).replace(/"/g,'&quot;')})" style="padding:9px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin-top:4px;cursor:pointer;font-size:14px">
-      <div style="font-weight:600">${c.name}${c.maintenancePlan ? ' <span style="font-size:10px;color:var(--red-l);font-weight:700">PLAN</span>' : ''}</div>
+      <div style="font-weight:600">${c.name}${c.maintenancePlan ? ' <span style="font-size:11px;color:var(--red-l);font-weight:700">PLAN</span>' : ''}</div>
       <div style="font-size:12px;color:var(--text2)">${c.phone||''} ${c.address||''}</div>
     </div>`
   ).join('') || '<div style="font-size:13px;color:var(--text3);padding:8px">No customers found.</div>';
@@ -8304,26 +8397,26 @@ function pbRenderLines() {
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:6px;align-items:center">
         <div>
-          <div style="font-size:10px;color:var(--text3);margin-bottom:2px">QTY</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:2px">QTY</div>
           <input class="form-input" style="font-size:13px" type="number" min="0.01" step="0.01" id="pb-li-qty-${i}" value="${li.qty||1}"
             oninput="pbRecalcLine(${i})">
         </div>
         <div>
-          <div style="font-size:10px;color:var(--text3);margin-bottom:2px">COST</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:2px">COST</div>
           <input class="form-input" style="font-size:13px" type="number" min="0" step="0.01" id="pb-li-cost-${i}" value="${li.cost||''}"
             oninput="pbRecalcLine(${i})">
         </div>
         <div>
-          <div style="font-size:10px;color:var(--text3);margin-bottom:2px">MARGIN%</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:2px">MARGIN%</div>
           <input class="form-input" style="font-size:13px" type="number" min="0" max="99" step="1" id="pb-li-margin-${i}" value="${li.margin||''}"
             oninput="pbRecalcLine(${i})">
         </div>
         <div>
-          <div style="font-size:10px;color:var(--text3);margin-bottom:2px">SELL</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:2px">SELL</div>
           <div id="pb-li-rate-${i}" style="font-size:13px;font-weight:600;color:var(--green);padding:8px 0">${fmtMoney(li.rate||0)}</div>
         </div>
         <div>
-          <div style="font-size:10px;color:var(--text3);margin-bottom:2px">TOTAL</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:2px">TOTAL</div>
           <div id="pb-li-total-${i}" style="font-size:13px;font-weight:600;padding:8px 0">${fmtMoney(li.total||0)}</div>
         </div>
       </div>
@@ -8674,6 +8767,439 @@ async function confirmCsvImport() {
   renderCustomers();
   showToast(`${imported} customer${imported !== 1 ? 's' : ''} imported`,'success');
 }
+
+// ══════════════════════════════════════════════════════════
+// FIELDPULSE HISTORICAL IMPORT
+// ══════════════════════════════════════════════════════════
+
+let _fpRaw = { jobs: null, invoices: null, payments: null };
+let _fpParsed = { jobs: [], invoices: [], payments: [] };
+let _fpPreview = []; // final job objects ready to commit
+let _fpUnmatched = {}; // fpJobId → selected customerId
+
+function openFpImportModal() {
+  fpResetToUpload();
+  openModal('modal-fp-import');
+}
+
+function fpResetToUpload() {
+  _fpRaw = { jobs: null, invoices: null, payments: null };
+  _fpParsed = { jobs: [], invoices: [], payments: [] };
+  _fpPreview = [];
+  _fpUnmatched = {};
+  ['jobs','inv','pay'].forEach(k => {
+    const el = document.getElementById('fp-'+k+'-file');
+    if (el) el.value = '';
+    const nm = document.getElementById('fp-'+k+'-name');
+    if (nm) nm.textContent = 'No file chosen';
+  });
+  const err = document.getElementById('fp-upload-error');
+  if (err) { err.style.display = 'none'; err.textContent = ''; }
+  document.getElementById('fp-step-upload').style.display = '';
+  document.getElementById('fp-step-preview').style.display = 'none';
+  document.getElementById('fp-step-done').style.display = 'none';
+}
+
+function fpHandleFile(type, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const keyMap = { jobs: 'fp-jobs-name', invoices: 'fp-inv-name', payments: 'fp-pay-name' };
+  const nm = document.getElementById(keyMap[type]);
+  if (nm) nm.textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = e => { _fpRaw[type] = e.target.result; };
+  reader.readAsText(file);
+}
+
+function fpCsvParse(text) {
+  // Skip BOM
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  // FieldPulse exports have a merged-header row 1 and real column headers row 2
+  // Detect: if first row has mostly empty quoted cells, skip it
+  const firstRow = lines[0];
+  const emptyRatio = (firstRow.match(/"",/g)||[]).length / (firstRow.split(',').length);
+  const headerLine = emptyRatio > 0.3 ? lines[1] : lines[0];
+  const dataStart = emptyRatio > 0.3 ? 2 : 1;
+
+  // Parse header
+  const headers = fpParseRow(headerLine);
+
+  const rows = [];
+  for (let i = dataStart; i < lines.length; i++) {
+    if (!lines[i].trim()) continue;
+    const vals = fpParseRow(lines[i]);
+    const obj = {};
+    headers.forEach((h, idx) => { obj[h.trim()] = (vals[idx] || '').trim(); });
+    rows.push(obj);
+  }
+  return rows;
+}
+
+function fpParseRow(line) {
+  const result = [];
+  let cur = '', inQuote = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') {
+      if (inQuote && line[i+1] === '"') { cur += '"'; i++; }
+      else inQuote = !inQuote;
+    } else if (c === ',' && !inQuote) {
+      result.push(cur); cur = '';
+    } else {
+      cur += c;
+    }
+  }
+  result.push(cur);
+  return result;
+}
+
+function fpNormName(s) {
+  return (s || '').toLowerCase().replace(/[^a-z0-9]/g,'');
+}
+
+function fpParseDate(s) {
+  if (!s) return null;
+  // "Mar 6, 2026, 11:00 AM" or "03/06/2026"
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+  return null;
+}
+
+function fpParseAmount(s) {
+  return parseFloat((s || '0').replace(/[^0-9.\-]/g,'')) || 0;
+}
+
+function fpParseFiles() {
+  const err = document.getElementById('fp-upload-error');
+  err.style.display = 'none';
+
+  if (!_fpRaw.jobs) {
+    err.textContent = 'Jobs CSV is required.';
+    err.style.display = '';
+    return;
+  }
+
+  try {
+    _fpParsed.jobs     = _fpRaw.jobs     ? fpCsvParse(_fpRaw.jobs)     : [];
+    _fpParsed.invoices = _fpRaw.invoices ? fpCsvParse(_fpRaw.invoices) : [];
+    _fpParsed.payments = _fpRaw.payments ? fpCsvParse(_fpRaw.payments) : [];
+  } catch(e) {
+    err.textContent = 'Parse error: ' + e.message;
+    err.style.display = '';
+    return;
+  }
+
+  // Build lookup maps
+  // Invoices keyed by Parent Job # (extract from Parent Job field "#1402 - Title" → "1402")
+  const invByJobId = {};
+  _fpParsed.invoices.forEach(inv => {
+    const pj = inv['Parent Job'] || '';
+    const m = pj.match(/#(\d+)/);
+    if (m) {
+      if (!invByJobId[m[1]]) invByJobId[m[1]] = [];
+      invByJobId[m[1]].push(inv);
+    }
+  });
+
+  // Payments keyed by Parent Invoice #ID
+  const payByInvId = {};
+  _fpParsed.payments.forEach(pay => {
+    const invId = pay['Parent Invoice'] || pay['#ID'] || '';
+    // Also index by job title match via Job Title field
+    const jobTitle = pay['Job Title'] || '';
+    // Primary key: try to match invoice by #ID in invByJobId values
+    // We'll do payment → invoice matching by Parent Invoice field later
+    // For now store by a composite
+    const pid = pay['#ID'];
+    if (pid) {
+      if (!payByInvId[pid]) payByInvId[pid] = [];
+      payByInvId[pid].push(pay);
+    }
+  });
+
+  // Match invoices to payments: invoices have #ID, payments have Parent Invoice = invoice #ID
+  // Build invId → payments[]
+  const paysByInvIdDirect = {};
+  _fpParsed.payments.forEach(pay => {
+    // Parent Invoice column contains the invoice #ID number
+    const raw = pay['Parent Invoice'] || '';
+    const id = raw.replace(/^#/,'').trim();
+    if (id) {
+      if (!paysByInvIdDirect[id]) paysByInvIdDirect[id] = [];
+      paysByInvIdDirect[id].push(pay);
+    }
+  });
+
+  // Build customer name → id lookup
+  const custByNorm = {};
+  state.customers.forEach(c => {
+    custByNorm[fpNormName(c.name)] = c.id;
+  });
+
+  // Build preview records
+  const matched = [], unmatched = [];
+  const existingJobNums = new Set(state.jobs.map(j => String(j.jobNumber)));
+  const existingArch = new Set(state.archivedJobs.map(j => String(j.jobNumber)));
+
+  _fpParsed.jobs.forEach(row => {
+    const fpJobId = (row['#ID'] || '').replace(/^#/,'').trim();
+    if (!fpJobId) return;
+
+    // Skip if already imported
+    if (existingJobNums.has(fpJobId) || existingArch.has(fpJobId)) return;
+
+    const custNameRaw = row['Customer'] || '';
+    const custNorm = fpNormName(custNameRaw);
+    const custId = custByNorm[custNorm] || null;
+
+    // Get linked invoices
+    const linkedInvs = invByJobId[fpJobId] || [];
+    const primaryInv = linkedInvs[0] || null;
+
+    // Invoice totals
+    const invTotal   = primaryInv ? fpParseAmount(primaryInv['Invoice Total'] || primaryInv['Pre-Tax Subtotal [Including Discounts & Surcharges]']) : fpParseAmount(row['Total Invoice Amount']);
+    const amtPaid    = primaryInv ? fpParseAmount(primaryInv['Amount Paid']) : fpParseAmount(row['Total Amount Paid']);
+    const amtDue     = primaryInv ? fpParseAmount(primaryInv['Amount Due'])  : (invTotal - amtPaid);
+    const productAmt = primaryInv ? fpParseAmount(primaryInv['Total Product Price']) : 0;
+    const serviceAmt = primaryInv ? fpParseAmount(primaryInv['Total Service Price'])  : invTotal;
+
+    // Payments
+    const invIdRaw = primaryInv ? (primaryInv['#ID'] || '').replace(/^#/,'').trim() : '';
+    const linkedPays = invIdRaw ? (paysByInvIdDirect[invIdRaw] || []) : [];
+
+    // Derive invoiceStatus
+    let invoiceStatus = 'draft';
+    if (invTotal > 0) {
+      if (amtDue <= 0.01)       invoiceStatus = 'paid';
+      else if (amtPaid > 0.01)  invoiceStatus = 'partial';
+      else                       invoiceStatus = 'sent';
+    }
+
+    // Build line items (summary level — no SKU breakdown available)
+    const lineItems = [];
+    if (serviceAmt > 0) {
+      lineItems.push({ id: uid('li'), type: 'labor', description: 'Labor / Services', qty: 1, rate: serviceAmt, total: serviceAmt, taxable: false, source: 'fieldpulse_import' });
+    }
+    if (productAmt > 0) {
+      lineItems.push({ id: uid('li'), type: 'material', description: 'Materials / Parts', qty: 1, rate: productAmt, total: productAmt, taxable: true, source: 'fieldpulse_import' });
+    }
+
+    // Build payment records
+    const payments = linkedPays.map(p => ({
+      id: uid('pay'),
+      amount: fpParseAmount(p['Amount']),
+      method: p['Method'] || 'Check',
+      ref: p['Reference'] || null,
+      depositDate: fpParseDate(p['Payment Recorded Date']) || fpParseDate(p['Created At']) || today(),
+      tip: 0, refunded: false, refundAmount: 0,
+      recordedAt: Date.now(),
+      stripeRef: null,
+      source: 'fieldpulse_import'
+    })).filter(p => p.amount > 0);
+
+    // If no payment records but amtPaid > 0, create synthetic payment
+    if (!payments.length && amtPaid > 0.01) {
+      payments.push({
+        id: uid('pay'),
+        amount: amtPaid,
+        method: 'Check',
+        ref: null,
+        depositDate: fpParseDate(row['End Date']) || today(),
+        tip: 0, refunded: false, refundAmount: 0,
+        recordedAt: Date.now(),
+        stripeRef: null,
+        source: 'fieldpulse_import_synthetic'
+      });
+    }
+
+    const jobObj = {
+      id: uid('job'),
+      jobNumber: parseInt(fpJobId),
+      fpOriginalId: fpJobId,
+      customerId: custId,
+      customerName: custNameRaw,
+      description: row['Title'] || row['Subtitle'] || '',
+      status: 'completed',
+      jobType: 'service',
+      scheduledDate: fpParseDate(row['Start Date']) || fpParseDate(row['Start Date/Time']),
+      completedDate: fpParseDate(row['End Date']) || fpParseDate(row['End Date/Time']),
+      address: row['Location Address'] || '',
+      tech: row['Assigned Team Members'] || '',
+      notes: row['Field Notes'] || row['Notes'] || '',
+      lineItems,
+      payments,
+      invoiceStatus,
+      photos: [],
+      timeLog: [],
+      history: [{ action: 'imported', from: 'fieldpulse', at: Date.now() }],
+      source: 'fieldpulse_import',
+      importedAt: Date.now(),
+      createdAt: Date.now()
+    };
+
+    if (custId) {
+      matched.push(jobObj);
+    } else {
+      unmatched.push({ job: jobObj, fpName: custNameRaw });
+    }
+  });
+
+  _fpPreview = [...matched, ...unmatched.map(u => u.job)];
+
+  // Render preview step
+  document.getElementById('fp-step-upload').style.display = 'none';
+  document.getElementById('fp-step-preview').style.display = '';
+
+  const total = _fpPreview.length;
+  const skipped = _fpParsed.jobs.length - total;
+  document.getElementById('fp-preview-summary').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
+      <div style="background:var(--surface2);border-radius:8px;padding:12px;text-align:center">
+        <div style="font-size:20px;font-weight:700;color:var(--green)">${matched.length}</div>
+        <div style="font-size:11px;color:var(--text3)">Matched</div>
+      </div>
+      <div style="background:var(--surface2);border-radius:8px;padding:12px;text-align:center">
+        <div style="font-size:20px;font-weight:700;color:var(--yellow, #f5a623)">${unmatched.length}</div>
+        <div style="font-size:11px;color:var(--text3)">Unmatched</div>
+      </div>
+      <div style="background:var(--surface2);border-radius:8px;padding:12px;text-align:center">
+        <div style="font-size:20px;font-weight:700;color:var(--text3)">${skipped}</div>
+        <div style="font-size:11px;color:var(--text3)">Already in CRM</div>
+      </div>
+    </div>`;
+
+  // Unmatched section
+  const unmatchedSection = document.getElementById('fp-unmatched-section');
+  const unmatchedList = document.getElementById('fp-unmatched-list');
+  if (unmatched.length) {
+    unmatchedSection.style.display = '';
+    const custOpts = state.customers.map(c => `<option value="${c.id}">${escHtml(c.name)}</option>`).join('');
+    unmatchedList.innerHTML = unmatched.map(u => `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:8px;background:var(--surface2);border-radius:6px">
+        <div style="flex:1;font-size:12px;min-width:0">
+          <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(u.fpName)}</div>
+          <div style="color:var(--text3)">#${u.job.jobNumber} · ${u.job.scheduledDate || 'no date'}</div>
+        </div>
+        <select class="form-select" style="font-size:12px;min-width:130px;max-width:160px" onchange="fpAssignCustomer('${u.job.id}',this.value)">
+          <option value="">Skip this job</option>
+          <option value="__new__">Create new customer</option>
+          ${custOpts}
+        </select>
+      </div>`).join('');
+  } else {
+    unmatchedSection.style.display = 'none';
+  }
+
+  // Preview table
+  document.getElementById('fp-preview-count').textContent = '('+total+' jobs)';
+  document.getElementById('fp-preview-table').innerHTML = `
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr style="border-bottom:1px solid var(--border)">
+        <th style="text-align:left;padding:4px 6px;font-weight:600;color:var(--text3)">#</th>
+        <th style="text-align:left;padding:4px 6px;font-weight:600;color:var(--text3)">Customer</th>
+        <th style="text-align:left;padding:4px 6px;font-weight:600;color:var(--text3)">Job</th>
+        <th style="text-align:right;padding:4px 6px;font-weight:600;color:var(--text3)">Total</th>
+        <th style="text-align:right;padding:4px 6px;font-weight:600;color:var(--text3)">Status</th>
+      </tr></thead>
+      <tbody>
+        ${_fpPreview.slice(0,50).map(j => {
+          const total = j.lineItems.reduce((s,l)=>s+(l.total||0),0);
+          const cust = state.customers.find(c=>c.id===j.customerId);
+          const custLabel = cust ? cust.name : (j.customerName ? '<span style="color:var(--yellow,#f5a623)">'+escHtml(j.customerName)+'</span>' : '<span style="color:var(--text3)">Unassigned</span>');
+          return `<tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:4px 6px;color:var(--text3)">${j.jobNumber}</td>
+            <td style="padding:4px 6px">${custLabel}</td>
+            <td style="padding:4px 6px;max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(j.description)}</td>
+            <td style="padding:4px 6px;text-align:right">${total > 0 ? fmtMoney(total) : '—'}</td>
+            <td style="padding:4px 6px;text-align:right;font-size:11px">${j.invoiceStatus}</td>
+          </tr>`;
+        }).join('')}
+        ${_fpPreview.length > 50 ? `<tr><td colspan="5" style="padding:6px;text-align:center;color:var(--text3);font-size:11px">…and ${_fpPreview.length - 50} more</td></tr>` : ''}
+      </tbody>
+    </table>`;
+}
+
+function fpAssignCustomer(jobId, custId) {
+  const job = _fpPreview.find(j => j.id === jobId);
+  if (!job) return;
+  if (custId === '__new__') {
+    // Will create customer at commit time using customerName
+    _fpUnmatched[jobId] = '__new__';
+    job.customerId = '__new__';
+  } else if (custId) {
+    job.customerId = custId;
+    _fpUnmatched[jobId] = custId;
+  } else {
+    job.customerId = null;
+    _fpUnmatched[jobId] = null;
+  }
+}
+
+async function fpCommitImport() {
+  const btn = document.getElementById('fp-commit-btn');
+  btn.textContent = 'Importing…';
+  btn.disabled = true;
+
+  // Jobs to import — skip those with no customer assigned (null) unless __new__
+  const toImport = _fpPreview.filter(j => j.customerId && j.customerId !== null);
+  let imported = 0, created = 0, skipped = 0;
+
+  for (const job of toImport) {
+    let custId = job.customerId;
+
+    // Create new customer if needed
+    if (custId === '__new__') {
+      const newCust = {
+        id: uid('cust'),
+        name: job.customerName || 'Unknown',
+        phone: '', email: '', address: job.address || '',
+        billing: '', maintenancePlan: false, notes: '',
+        createdAt: Date.now(), source: 'fieldpulse_import'
+      };
+      state.customers.unshift(newCust);
+      await saveOne('customers', newCust);
+      custId = newCust.id;
+      created++;
+    }
+
+    job.customerId = custId;
+
+    // Archive — all FP imports go to archivedJobs (they're historical/closed)
+    state.archivedJobs.unshift(job);
+    await saveOne('jobs', job);
+    imported++;
+  }
+
+  skipped = _fpPreview.length - toImport.length;
+
+  // Update import status in settings
+  const statusEl = document.getElementById('fp-import-status');
+  if (statusEl) {
+    const now = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    statusEl.textContent = `Last import: ${now} · ${imported} jobs imported`;
+  }
+
+  // Show done step
+  document.getElementById('fp-step-preview').style.display = 'none';
+  document.getElementById('fp-step-done').style.display = '';
+  document.getElementById('fp-done-title').textContent = 'Import Complete';
+  document.getElementById('fp-done-sub').innerHTML =
+    `${imported} job${imported!==1?'s':''} imported` +
+    (created ? ` · ${created} new customer${created!==1?'s':''} created` : '') +
+    (skipped ? ` · ${skipped} skipped (unassigned)` : '');
+
+  // Refresh views
+  if (currentView === 'jobs') renderJobs();
+  if (currentView === 'customers') renderCustomers();
+
+  btn.textContent = 'Import All';
+  btn.disabled = false;
+}
+
+// ══════════════════════════════════════════════════════════
+// END FIELDPULSE HISTORICAL IMPORT
+// ══════════════════════════════════════════════════════════
 
 (async () => {
   // Check for existing valid session
